@@ -4,7 +4,7 @@
 
 typedef unsigned short u16;
 
-enum reg {
+enum {
     REG_R0 = 0,
     REG_R1,
     REG_R2,
@@ -20,13 +20,13 @@ enum reg {
     REG_COUNT
 };
 
-enum cc_flag {
+enum {
     CC_POS  = 0x1,
     CC_ZERO = 0x2,
     CC_NEG  = 0x4
 };
 
-enum opcode {
+enum {
     OPCODE_BR = 0,
     OPCODE_ADD,
     OPCODE_LD,
