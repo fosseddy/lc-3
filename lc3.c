@@ -57,7 +57,7 @@ u16 not(u16 dst, u16 src)
 void debug_regs()
 {
     for (size_t i = 0; i < REG_COUNT; ++i) {
-        printf("%hi ", regs[i]);
+        printf("%5u ", regs[i]);
     }
     printf("\n");
 }
@@ -82,6 +82,7 @@ int main(void)
         u16 inst = program[regs[REG_PC]++];
         u16 opcode = inst >> 12;
         switch (opcode) {
+        case OPCODE_ADD:
         case OPCODE_AND: {
             u16 dst = inst >> 9 & 0x7;
             u16 src1 = inst >> 6 & 0x7;
@@ -92,34 +93,18 @@ int main(void)
                 if (src2 >> 4 & 0x1) {
                     src2 = src2 | ~0x1F;
                 }
-                printf("AND (imm)\n");
-                regs[dst] = regs[src1] & src2;
             } else {
-                printf("AND (reg)\n");
-                regs[dst] = regs[src1] & regs[src2];
+                src2 = regs[src2];
             }
-        } break;
 
-        case OPCODE_ADD: {
-            u16 dst = inst >> 9 & 0x7;
-            u16 src1 = inst >> 6 & 0x7;
-            u16 src2 = inst & 0x7;
-
-            if (inst >> 5 & 0x1) {
-                src2 = inst & 0x1F;
-                if (src2 >> 4 & 0x1) {
-                    src2 = src2 | ~0x1F;
-                }
-                printf("ADD (imm)\n");
+            if (opcode == OPCODE_ADD) {
                 regs[dst] = regs[src1] + src2;
             } else {
-                printf("ADD (reg)\n");
-                regs[dst] = regs[src1] + regs[src2];
+                regs[dst] = regs[src1] & src2;
             }
         } break;
 
         case OPCODE_NOT: {
-            printf("NOT\n");
             u16 dst = inst >> 9 & 0x7;
             u16 src = inst >> 6 & 0x7;
             regs[dst] = ~regs[src];
@@ -129,6 +114,7 @@ int main(void)
             fprintf(stderr, "opcode %4x not implemented\n", opcode);
         }
 
+        printf("\n");
         debug_regs();
     }
 
