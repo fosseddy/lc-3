@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define MEMORY_CAP (1<<16)
+#define MEMORY_CAP (1 << 16)
 
 typedef unsigned short u16;
 
@@ -27,22 +27,22 @@ enum {
 };
 
 enum {
-    OPCODE_BR = 0,
-    OPCODE_ADD,
-    OPCODE_LD,
-    OPCODE_ST,
-    OPCODE_RESERVED1,
-    OPCODE_AND,
-    OPCODE_LDR,
-    OPCODE_STR,
-    OPCODE_RESERVED2,
-    OPCODE_NOT,
-    OPCODE_LDI,
-    OPCODE_STI,
-    OPCODE_JMP,
-    OPCODE_RESERVED3,
-    OPCODE_LEA,
-    OPCODE_TRAP
+    OP_BR = 0,
+    OP_ADD,
+    OP_LD,
+    OP_ST,
+    OP_RESERVED1,
+    OP_AND,
+    OP_LDR,
+    OP_STR,
+    OP_RESERVED2,
+    OP_NOT,
+    OP_LDI,
+    OP_STI,
+    OP_JMP,
+    OP_RESERVED3,
+    OP_LEA,
+    OP_TRAP
 };
 
 static u16 regs[REG_COUNT] = {0};
@@ -82,8 +82,8 @@ int main(void)
         u16 inst = program[regs[REG_PC]++];
         u16 opcode = inst >> 12;
         switch (opcode) {
-        case OPCODE_ADD:
-        case OPCODE_AND: {
+        case OP_ADD:
+        case OP_AND: {
             u16 dst = inst >> 9 & 0x7;
             u16 src1 = inst >> 6 & 0x7;
             u16 src2 = inst & 0x7;
@@ -94,7 +94,7 @@ int main(void)
                 src2 = regs[src2];
             }
 
-            if (opcode == OPCODE_ADD) {
+            if (opcode == OP_ADD) {
                 regs[dst] = regs[src1] + src2;
             } else {
                 regs[dst] = regs[src1] & src2;
@@ -103,20 +103,20 @@ int main(void)
             setcc(regs[dst]);
         } break;
 
-        case OPCODE_NOT: {
+        case OP_NOT: {
             u16 dst = inst >> 9 & 0x7;
             u16 src = inst >> 6 & 0x7;
             regs[dst] = ~regs[src];
             setcc(regs[dst]);
         } break;
 
-        case OPCODE_ST: {
+        case OP_ST: {
             u16 src = inst >> 9 & 0x7;
             u16 offset9 = sign_extend(inst & 0x1FF, 9);
             memory[regs[REG_PC] + offset9] = regs[src];
         } break;
 
-        case OPCODE_STI: {
+        case OP_STI: {
             u16 src = inst >> 9 & 0x7;
             u16 offset9 = sign_extend(inst & 0x1FF, 9);
             u16 idx = regs[REG_PC] + offset9;
@@ -124,7 +124,7 @@ int main(void)
             memory[addr] = regs[src];
         } break;
 
-        case OPCODE_STR: {
+        case OP_STR: {
             u16 src = inst >> 9 & 0x7;
             u16 base = inst >> 6 & 0x7;
             u16 offset6 = sign_extend(inst & 0x3F, 6);
@@ -132,14 +132,14 @@ int main(void)
             memory[idx] = regs[src];
         } break;
 
-        case OPCODE_LD: {
+        case OP_LD: {
             u16 dst = inst >> 9 & 0x7;
             u16 offset9 = sign_extend(inst & 0x1FF, 9);
             regs[dst] = memory[regs[REG_PC] + offset9];
             setcc(regs[dst]);
         } break;
 
-        case OPCODE_LDI: {
+        case OP_LDI: {
             u16 dst = inst >> 9 & 0x7;
             u16 offset9 = sign_extend(inst & 0x1FF, 9);
             u16 idx = regs[REG_PC] + offset9;
@@ -148,7 +148,7 @@ int main(void)
             setcc(regs[dst]);
         } break;
 
-        case OPCODE_LDR: {
+        case OP_LDR: {
             u16 dst = inst >> 9 & 0x7;
             u16 base = inst >> 6 & 0x7;
             u16 offset6 = sign_extend(inst & 0x3F, 6);
@@ -157,7 +157,7 @@ int main(void)
             setcc(regs[dst]);
         } break;
 
-        case OPCODE_LEA: {
+        case OP_LEA: {
             u16 dst = inst >> 9 & 0x7;
             u16 offset9 = sign_extend(inst & 0x1FF, 9);
             u16 addr = regs[REG_PC] + offset9;
@@ -165,7 +165,7 @@ int main(void)
             setcc(regs[dst]);
         } break;
 
-        case OPCODE_BR: {
+        case OP_BR: {
             u16 nzp = inst >> 9 & 0x7;
             u16 offset9 = sign_extend(inst & 0x1FF, 9);
             if (nzp == regs[REG_NZP]) {
@@ -173,12 +173,12 @@ int main(void)
             }
         } break;
 
-        case OPCODE_JMP: {
+        case OP_JMP: {
             u16 base = inst >> 6 & 0x7;
             regs[REG_PC] += regs[base];
         } break;
 
-        case OPCODE_TRAP: {
+        case OP_TRAP: {
             u16 trapvec8 = inst & 0xFF;
             switch (trapvec8) {
                 case 0x21: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
