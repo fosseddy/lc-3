@@ -1,3 +1,3 @@
 # Little Computer 3
 
-[ISA](https://cs2461-2020.github.io/lectures/lc3ISA.pdf) that i used
+[ISA](http://users.ece.utexas.edu/~patt/21s.460n/handouts/appA.pdf)
