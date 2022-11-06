@@ -29,6 +29,19 @@ enum opcode {
 static u16 regs[REG_COUNT] = {0};
 static u16 memory[MEMORY_CAP] = {0};
 
+void setcc(u16 value)
+{
+    u16 nzp = 0;
+    if (value == 0) {
+        nzp = nzp | 0x2;
+    } else if (value >> 15 & 0x1) { // negative
+        nzp = nzp | 0x4;
+    } else {
+        nzp = nzp | 0x1;
+    }
+    regs[REG_NZP] = nzp;
+}
+
 u16 and(u16 dst, u16 src1, u16 src2)
 {
     return OPCODE_AND << 12 | dst << 9 | src1 << 6 | 0x0 << 3 | src2;
@@ -102,12 +115,15 @@ int main(void)
             } else {
                 regs[dst] = regs[src1] & src2;
             }
+
+            setcc(regs[dst]);
         } break;
 
         case OPCODE_NOT: {
             u16 dst = inst >> 9 & 0x7;
             u16 src = inst >> 6 & 0x7;
             regs[dst] = ~regs[src];
+            setcc(regs[dst]);
         } break;
 
         default:
