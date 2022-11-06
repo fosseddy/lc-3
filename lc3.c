@@ -27,93 +27,26 @@ enum cc_flag {
 };
 
 enum opcode {
-    OPCODE_ADD = 1,
-    OPCODE_LD = 2,
-    OPCODE_ST = 3,
-    OPCODE_AND = 5,
-    OPCODE_LDR = 6,
-    OPCODE_STR = 7,
-    OPCODE_NOT = 9,
-    OPCODE_LDI = 10,
-    OPCODE_STI = 11,
-    OPCODE_LEA = 14
+    OPCODE_BR = 0,
+    OPCODE_ADD,
+    OPCODE_LD,
+    OPCODE_ST,
+    OPCODE_RESERVED1,
+    OPCODE_AND,
+    OPCODE_LDR,
+    OPCODE_STR,
+    OPCODE_RESERVED2,
+    OPCODE_NOT,
+    OPCODE_LDI,
+    OPCODE_STI,
+    OPCODE_JMP,
+    OPCODE_RESERVED3,
+    OPCODE_LEA,
+    OPCODE_TRAP
 };
 
 static u16 regs[REG_COUNT] = {0};
 static u16 memory[MEMORY_CAP] = {0};
-
-u16 and(enum reg dst, enum reg src1, enum reg src2)
-{
-    return OPCODE_AND << 12 | dst << 9 | src1 << 6 | 0x0 << 3 | src2;
-}
-
-u16 and_imm(enum reg dst, enum reg src1, u16 imm5)
-{
-    return OPCODE_AND << 12 | dst << 9 | src1 << 6 | 0x1 << 5 | imm5 & 0x1F;
-}
-
-u16 add(enum reg dst, enum reg src1, enum reg src2)
-{
-    return OPCODE_ADD << 12 | dst << 9 | src1 << 6 | 0x0 << 3 | src2;
-}
-
-u16 add_imm(enum reg dst, enum reg src1, u16 imm5)
-{
-    return OPCODE_ADD << 12 | dst << 9 | src1 << 6 | 0x1 << 5 | imm5 & 0x1F;
-}
-
-u16 not(enum reg dst, enum reg src)
-{
-    return OPCODE_NOT << 12 | dst << 9 | src << 6 | 0x3F;
-}
-
-u16 load(enum reg dst, u16 offset9)
-{
-    return OPCODE_LD << 12 | dst << 9 | offset9 & 0x1FF;
-}
-
-u16 store(enum reg src, u16 offset9)
-{
-    return OPCODE_ST << 12 | src << 9 | offset9 & 0x1FF;
-}
-
-u16 loadi(enum reg dst, u16 offset9)
-{
-    return OPCODE_LDI << 12 | dst << 9 | offset9 & 0x1FF;
-}
-
-u16 storei(enum reg src, u16 offset9)
-{
-    return OPCODE_STI << 12 | src << 9 | offset9 & 0x1FF;
-}
-
-u16 loadr(enum reg dst, enum reg base, u16 offset6)
-{
-    return OPCODE_LDR << 12 | dst << 9 | base << 6 | offset6 & 0x3F;
-}
-
-u16 storer(enum reg src, enum reg base, u16 offset6)
-{
-    return OPCODE_STR << 12 | src << 9 | base << 6 | offset6 & 0x3F;
-}
-
-u16 lea(enum reg dst, u16 offset9)
-{
-    return OPCODE_LEA << 12 | dst << 9 | offset9 & 0x1FF;
-}
-
-void debug_regs()
-{
-    for (size_t i = 0; i < REG_COUNT; ++i) {
-        printf("%5hu ", regs[i]);
-    }
-    printf("\n");
-}
-
-void debug_binary(u16 b, char *label)
-{
-    printf("%s: %016b\n", label, b);
-}
 
 u16 sign_extend(u16 value, size_t bit_len)
 {
@@ -145,7 +78,6 @@ int main(void)
 
     regs[REG_PC] = 0;
 
-    debug_regs();
     for (size_t i = 0; regs[REG_PC] < psz; ++i) {
         u16 inst = program[regs[REG_PC]++];
         u16 opcode = inst >> 12;
@@ -233,19 +165,33 @@ int main(void)
             setcc(regs[dst]);
         } break;
 
+        case OPCODE_BR: {
+            u16 nzp = inst >> 9 & 0x7;
+            u16 offset9 = sign_extend(inst & 0x1FF, 9);
+            if (nzp == regs[REG_NZP]) {
+                regs[REG_PC] += offset9;
+            }
+        } break;
+
+        case OPCODE_JMP: {
+            u16 base = inst >> 6 & 0x7;
+            regs[REG_PC] += regs[base];
+        } break;
+
+        case OPCODE_TRAP: {
+            u16 trapvec8 = inst & 0xFF;
+            switch (trapvec8) {
+                case 0x21: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
+                case 0x23: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
+                case 0x25: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
+                default: fprintf(stderr, "unknown syscall %4x\n", trapvec8);
+            }
+        } break;
+
         default:
             fprintf(stderr, "opcode %4x not implemented\n", opcode);
         }
-
-        printf("\n");
-        debug_regs();
     }
-
-    printf("\nmemory:\n");
-    for (size_t i = 0; i < 10; ++i) {
-        printf("%5u ", memory[i]);
-    }
-    printf("\n");
 
     return 0;
 }
