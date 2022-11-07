@@ -86,12 +86,12 @@ void mem_writew(u16 w, u16 addr)
 
 int main(void)
 {
-    regs[R_R0] = 4;
+    regs[R_R1] = 32769;
 
     size_t psz = 0;
     u16 program[10] = {0};
 
-    program[psz++] = OP_XOR << 12 | R_R0 << 9 | R_R0 << 6 | 0x1 << 5 | 0x3F;
+    program[psz++] = OP_SHF << 12 | R_R0 << 9 | R_R1 << 6 | 0x3 << 4 | 1 & 0xF;
     program[psz++] = 69;
 
     for (size_t i = 0, j = 0; i < psz; ++i, j += 2) {
@@ -122,6 +122,28 @@ int main(void)
             case OP_AND: regs[dst] = regs[src1] & src2; break;
             case OP_XOR: regs[dst] = regs[src1] ^ src2; break;
             default: assert(0 && "unreachable\n");
+            }
+
+            setcc(regs[dst]);
+        } break;
+
+        case OP_SHF: {
+            u16 dst = inst >> 9 & 0x7;
+            u16 src = inst >> 6 & 0x7;
+            u16 amount4 = inst & 0xF;
+
+            if (inst >> 4 & 0x1) {
+                if (inst >> 5 & 0x1) {
+                    u16 sign_bit = 0;
+                    if (inst >> 15 & 0x1) {
+                        sign_bit = 0xFFFF << (16 - amount4);
+                    }
+                    regs[dst] = sign_bit | regs[src] >> amount4;
+                } else {
+                    regs[dst] = regs[src] >> amount4;
+                }
+            } else {
+                regs[dst] = regs[src] << amount4;
             }
 
             setcc(regs[dst]);
@@ -195,8 +217,7 @@ int main(void)
         //    }
         //} break;
 
-        //default:
-        //    fprintf(stderr, "opcode %4x not implemented\n", opcode);
+        default: fprintf(stderr, "opcode %4x not implemented\n", opcode);
         }
     }
 
