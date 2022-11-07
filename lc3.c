@@ -33,7 +33,7 @@ enum {
     OP_ADD,
     OP_LDB,
     OP_STB,
-    OP_RESERVED1,
+    OP_JSR, // @TODO(art): not implemented
     OP_AND,
     OP_LDW,
     OP_STW,
@@ -44,7 +44,7 @@ enum {
     OP_JMP,
     OP_SHF,
     OP_LEA,
-    OP_TRAP
+    OP_TRAP // @TODO(art): not implemented
 };
 
 static u16 regs[R_COUNT] = {0};
@@ -84,14 +84,15 @@ void mem_writew(u16 w, u16 addr)
     memory[addr + 1] = w >> 8;
 }
 
+// @TODO(art): proper ojbect file loading
+// @TODO(art): init memory, PC, etc
+// @TODO(art): proper halting
 int main(void)
 {
-    regs[R_R1] = 32769;
-
     size_t psz = 0;
     u16 program[10] = {0};
 
-    program[psz++] = OP_SHF << 12 | R_R0 << 9 | R_R1 << 6 | 0x3 << 4 | 1 & 0xF;
+    program[psz++] = OP_BR << 12 | R_R0 << 9 | 13;
     program[psz++] = 69;
 
     for (size_t i = 0, j = 0; i < psz; ++i, j += 2) {
@@ -185,37 +186,26 @@ int main(void)
             // @TODO(art): check regs[base] alignment
         } break;
 
-        //case OP_LEA: {
-        //    u16 dst = inst >> 9 & 0x7;
-        //    u16 offset9 = sext(inst & 0x1FF, 9);
-        //    u16 addr = regs[REG_PC] + offset9;
-        //    regs[dst] = addr;
-        //    setcc(regs[dst]);
-        //} break;
+        case OP_LEA: {
+            u16 dst = inst >> 9 & 0x7;
+            u16 pcoffset9 = sext(inst & 0x1FF, 9) << 1;
+            regs[dst] = regs[R_PC] + pcoffset9;
+            setcc(regs[dst]);
+        } break;
 
-        //case OP_BR: {
-        //    u16 nzp = inst >> 9 & 0x7;
-        //    u16 offset9 = sext(inst & 0x1FF, 9);
-        //    if (nzp == regs[REG_NZP]) {
-        //        regs[REG_PC] += offset9;
-        //    }
-        //} break;
+        case OP_BR: {
+            u16 nzp = inst >> 9 & 0x7;
+            u16 pcoffset9 = sext(inst & 0x1FF, 9) << 1;
+            if (nzp == (regs[R_PSR] & 0x7)) {
+                regs[R_PC] += pcoffset9;
+            }
+        } break;
 
         case OP_JMP: {
             u16 base = inst >> 6 & 0x7;
             regs[R_PC] = regs[base];
             // @TODO(art): check regs[base] alignment
         } break;
-
-        //case OP_TRAP: {
-        //    u16 trapvec8 = inst & 0xFF;
-        //    switch (trapvec8) {
-        //        case 0x21: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
-        //        case 0x23: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
-        //        case 0x25: fprintf(stderr, "not implemented %4x\n", trapvec8); break;
-        //        default: fprintf(stderr, "unknown syscall %4x\n", trapvec8);
-        //    }
-        //} break;
 
         default: fprintf(stderr, "opcode %4x not implemented\n", opcode);
         }
