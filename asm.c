@@ -175,12 +175,12 @@ int main(void)
     // @TODO(art): make growable array
     struct token tokens[50] = {0};
     size_t tokens_len = 0;
-    int stop_scannig = 0;
+    int stop_scanning = 0;
 
     for (;;) {
         s.start = s.curr;
 
-        if (!has_chars(&s) || stop_scannig) break;
+        if (!has_chars(&s) || stop_scanning) break;
 
         char c = advance(&s);
 
@@ -383,7 +383,7 @@ int main(void)
             case 4:
                 if (memcmp(s.start + 1, "end", 3) == 0) {
                     kind = T_END;
-                    stop_scannig = 1;
+                    stop_scanning = 1;
                 }
                 break;
             case 5:
