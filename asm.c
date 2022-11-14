@@ -51,8 +51,8 @@ enum token_kind {
 
     T_LABEL,
 
-    T_ADD,
-
+    T_BR,
+    T_IN,
     T_R0,
     T_R1,
     T_R2,
@@ -61,6 +61,39 @@ enum token_kind {
     T_R5,
     T_R6,
     T_R7,
+
+    T_ADD,
+    T_AND,
+    T_BRN,
+    T_BRZ,
+    T_BRP,
+    T_JMP,
+    T_JSR,
+    T_LDB,
+    T_LDW,
+    T_LEA,
+    T_NOP,
+    T_NOT,
+    T_RET,
+    T_RTI,
+    T_STB,
+    T_STW,
+    T_XOR,
+    T_OUT,
+
+    T_BRNZ,
+    T_BRNP,
+    T_BRZP,
+    T_JSRR,
+    T_LSHF,
+    T_TRAP,
+    T_HALT,
+    T_GETC,
+    T_PUTS,
+
+    T_RSHFL,
+    T_RSHFA,
+    T_BRNZP,
 
     T_DECIMAL
 };
@@ -115,12 +148,6 @@ void make_newline_token(struct token *t, struct scanner *s)
     t->line = s->line;
 }
 
-int check_kwd(struct scanner *s, size_t start, size_t len, char *rest)
-{
-    return (size_t) (s->curr - s->start) == start + len &&
-           memcmp(s->start + start, rest, len) == 0;
-}
-
 int main(void)
 {
     // @LEAK(art): let OS free it for now
@@ -148,47 +175,146 @@ int main(void)
         // @NOTE(art): kwd, regs, labels
         if (isalpha(c)) {
             while (isalnum(peek(&s))) advance(&s);
-            switch (*s.start) {
-            case 'a':
-                if (check_kwd(&s, 1, 2, "dd")) {
-                    make_token(&tokens[tokens_len++], T_ADD, &s);
-                    continue;
+
+            enum token_kind kind = T_LABEL;
+
+            switch (s.curr - s.start) {
+            case 2:
+                switch (*s.start) {
+                case 'r':
+                    switch (*(s.start + 1)) {
+                    case '0': kind = T_R0; break;
+                    case '1': kind = T_R1; break;
+                    case '2': kind = T_R2; break;
+                    case '3': kind = T_R3; break;
+                    case '4': kind = T_R4; break;
+                    case '5': kind = T_R5; break;
+                    case '6': kind = T_R6; break;
+                    case '7': kind = T_R7; break;
+                    }
+                    break;
+                case 'b':
+                    if (*(s.start + 1) == 'r') kind = T_BR;
+                    break;
+                case 'i':
+                    if (*(s.start + 1) == 'n') kind = T_IN;
+                    break;
                 }
                 break;
 
-            case 'r':
-                if (s.curr - s.start == 2) {
-                    switch (*(s.start + 1)) {
-                    case '0':
-                        make_token(&tokens[tokens_len++], T_R0, &s);
-                        continue;
-                    case '1':
-                        make_token(&tokens[tokens_len++], T_R1, &s);
-                        continue;
-                    case '2':
-                        make_token(&tokens[tokens_len++], T_R2, &s);
-                        continue;
-                    case '3':
-                        make_token(&tokens[tokens_len++], T_R3, &s);
-                        continue;
-                    case '4':
-                        make_token(&tokens[tokens_len++], T_R4, &s);
-                        continue;
-                    case '5':
-                        make_token(&tokens[tokens_len++], T_R5, &s);
-                        continue;
-                    case '6':
-                        make_token(&tokens[tokens_len++], T_R6, &s);
-                        continue;
-                    case '7':
-                        make_token(&tokens[tokens_len++], T_R7, &s);
-                        continue;
+            case 3:
+                switch (*s.start) {
+                case 'a':
+                    if (memcmp(s.start + 1, "dd", 2) == 0) {
+                        kind = T_ADD;
+                    } else if (memcmp(s.start + 1, "nd", 2) == 0) {
+                        kind = T_AND;
                     }
+                    break;
+                case 'b':
+                    if (memcmp(s.start + 1, "rn", 2) == 0) {
+                        kind = T_BRN;
+                    } else if (memcmp(s.start + 1, "rz", 2) == 0) {
+                        kind = T_BRZ;
+                    } else if (memcmp(s.start + 1, "rp", 2) == 0) {
+                        kind = T_BRP;
+                    }
+                    break;
+                case 'j':
+                    if (memcmp(s.start + 1, "mp", 2) == 0) {
+                        kind = T_JMP;
+                    } else if (memcmp(s.start + 1, "sr", 2) == 0) {
+                        kind = T_JSR;
+                    }
+                    break;
+                case 'l':
+                    if (memcmp(s.start + 1, "db", 2) == 0) {
+                        kind = T_LDB;
+                    } else if (memcmp(s.start + 1, "dw", 2) == 0) {
+                        kind = T_LDW;
+                    } else if (memcmp(s.start + 1, "ea", 2) == 0) {
+                        kind = T_LEA;
+                    }
+                    break;
+                case 'n':
+                    if (memcmp(s.start + 1, "op", 2) == 0) {
+                        kind = T_NOP;
+                    } else if (memcmp(s.start + 1, "ot", 2) == 0) {
+                        kind = T_NOT;
+                    }
+                    break;
+                case 'r':
+                    if (memcmp(s.start + 1, "et", 2) == 0) {
+                        kind = T_RET;
+                    } else if (memcmp(s.start + 1, "ti", 2) == 0) {
+                        kind = T_RTI;
+                    }
+                    break;
+                case 's':
+                    if (memcmp(s.start + 1, "tb", 2) == 0) {
+                        kind = T_STB;
+                    } else if (memcmp(s.start + 1, "tw", 2) == 0) {
+                        kind = T_STW;
+                    }
+                    break;
+                case 'x':
+                    if (memcmp(s.start + 1, "or", 2) == 0) kind = T_XOR;
+                    break;
+                case 'o':
+                    if (memcmp(s.start + 1, "ut", 2) == 0) kind = T_OUT;
+                    break;
+                }
+                break;
+
+            case 4:
+                switch (*s.start) {
+                case 'b':
+                    if (memcmp(s.start + 1, "rnz", 3) == 0) {
+                        kind = T_BRNZ;
+                    } else if (memcmp(s.start + 1, "rnp", 3) == 0) {
+                        kind = T_BRNP;
+                    } else if (memcmp(s.start + 1, "rzp", 3) == 0) {
+                        kind = T_BRZP;
+                    }
+                    break;
+                case 'j':
+                    if (memcmp(s.start + 1, "srr", 3) == 0) kind = T_JSRR;
+                    break;
+                case 'l':
+                    if (memcmp(s.start + 1, "shf", 3) == 0) kind = T_LSHF;
+                    break;
+                case 't':
+                    if (memcmp(s.start + 1, "rap", 3) == 0) kind = T_TRAP;
+                    break;
+                case 'h':
+                    if (memcmp(s.start + 1, "alt", 3) == 0) kind = T_HALT;
+                    break;
+                case 'g':
+                    if (memcmp(s.start + 1, "etc", 3) == 0) kind = T_GETC;
+                    break;
+                case 'p':
+                    if (memcmp(s.start + 1, "uts", 3) == 0) kind = T_PUTS;
+                    break;
+                }
+                break;
+
+            case 5:
+                switch (*s.start) {
+                case 'r':
+                    if (memcmp(s.start + 1, "shfl", 4) == 0) {
+                        kind = T_RSHFL;
+                    } else if (memcmp(s.start + 1, "shfa", 4) == 0) {
+                        kind = T_RSHFA;
+                    }
+                    break;
+                case 'b':
+                    if (memcmp(s.start + 1, "rnzp", 4) == 0) kind = T_BRNZP;
+                    break;
                 }
                 break;
             }
 
-            make_token(&tokens[tokens_len++], T_LABEL, &s);
+            make_token(&tokens[tokens_len++], kind, &s);
             continue;
         }
 
