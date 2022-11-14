@@ -95,7 +95,14 @@ enum token_kind {
     T_RSHFA,
     T_BRNZP,
 
-    T_DECIMAL
+    T_ORIG,
+    T_FILL,
+    T_BLKW,
+    T_STRINGZ,
+    T_END,
+
+    T_DECIMAL,
+    T_HEX
 };
 
 struct token {
@@ -109,6 +116,7 @@ struct scanner {
     char *start;
     char *curr;
     size_t line;
+    int add_newline;
 };
 
 int has_chars(struct scanner *s)
@@ -138,6 +146,8 @@ void make_token(struct token *t, enum token_kind kind, struct scanner *s)
     t->start = s->start;
     t->len = s->curr - s->start;
     t->line = s->line;
+
+    s->add_newline = 1;
 }
 
 void make_newline_token(struct token *t, struct scanner *s)
@@ -158,22 +168,24 @@ int main(void)
     struct scanner s = {
         .start = src,
         .curr = src,
-        .line = 1
+        .line = 1,
+        .add_newline = 0
     };
 
     // @TODO(art): make growable array
     struct token tokens[50] = {0};
     size_t tokens_len = 0;
+    int stop_scannig = 0;
 
     for (;;) {
         s.start = s.curr;
 
-        if (!has_chars(&s)) break;
+        if (!has_chars(&s) || stop_scannig) break;
 
         char c = advance(&s);
 
         // @NOTE(art): kwd, regs, labels
-        if (isalpha(c)) {
+        if (c != 'x' && isalpha(c)) {
             while (isalnum(peek(&s))) advance(&s);
 
             enum token_kind kind = T_LABEL;
@@ -325,7 +337,10 @@ int main(void)
             break;
 
         case '\n':
-            make_newline_token(&tokens[tokens_len++], &s);
+            if (s.add_newline) {
+                make_newline_token(&tokens[tokens_len++], &s);
+                s.add_newline = 0;
+            }
             s.line += 1;
             break;
 
@@ -346,6 +361,49 @@ int main(void)
             // @TODO(art): handle error
             assert(s.curr - s.start > 0);
             make_token(&tokens[tokens_len++], T_DECIMAL, &s);
+            break;
+
+        case 'x':
+            s.start++;
+
+            if (next(&s, '-')) advance(&s);
+            while (isxdigit(peek(&s))) advance(&s);
+
+            // @TODO(art): handle error
+            assert(s.curr - s.start > 0);
+            make_token(&tokens[tokens_len++], T_HEX, &s);
+            break;
+
+        case '.':
+            while (isalnum(peek(&s))) advance(&s);
+
+            enum token_kind kind = -1;
+
+            switch (s.curr - s.start) {
+            case 4:
+                if (memcmp(s.start + 1, "end", 3) == 0) {
+                    kind = T_END;
+                    stop_scannig = 1;
+                }
+                break;
+            case 5:
+                if (memcmp(s.start + 1, "orig", 4) == 0) {
+                    kind = T_ORIG;
+                } else if (memcmp(s.start + 1, "fill", 4) == 0) {
+                    kind = T_FILL;
+                } else if (memcmp(s.start + 1, "blkw", 4) == 0) {
+                    kind = T_BLKW;
+                }
+                break;
+            case 8:
+                if (memcmp(s.start + 1, "stringz", 7) == 0) kind = T_STRINGZ;
+                break;
+            }
+
+            // @TODO(art): handle error
+            assert((int) kind != -1);
+            make_token(&tokens[tokens_len++], kind, &s);
+
             break;
 
         default: printf("Unknown char: '%c'\n", c);
