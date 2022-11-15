@@ -35,6 +35,7 @@ enum token_kind {
     T_NEWLINE,
 
     T_LABEL,
+    T_IDENT,
 
     T_reg_begin,
     T_R0,
@@ -252,7 +253,7 @@ int main(void)
         if (c != 'x' && isalpha(c)) {
             while (isalnum(peek(&s))) advance(&s);
 
-            enum token_kind kind = T_LABEL;
+            enum token_kind kind = T_IDENT;
 
             switch (s.curr - s.start) {
             case 2:
@@ -390,6 +391,13 @@ int main(void)
                 break;
             }
 
+            if (kind == T_IDENT) {
+                if (tokens.size == 0 ||
+                        tokens.items[tokens.size - 1].kind == T_NEWLINE) {
+                    kind = T_LABEL;
+                }
+            }
+
             tokens_put(&tokens, &s, kind);
             continue;
         }
@@ -489,15 +497,13 @@ int main(void)
             addr_offset += 2;
             break;
 
-        case T_LABEL:
-            if (i == 0 || tokens.items[i - 1].kind == T_NEWLINE) {
-                struct label l = {
-                    .name = t.lexem, // @NOTE(art): does not copy value
-                    .len = t.len,
-                    .addr = (size_t) addr_offset
-                };
-                ARRAY_PUT(&labels, struct label, l);
-            }
+        case T_LABEL:;
+            struct label l = {
+                .name = t.lexem,
+                .len = t.len,
+                .addr = (size_t) addr_offset
+            };
+            ARRAY_PUT(&labels, struct label, l);
             break;
         }
     }
