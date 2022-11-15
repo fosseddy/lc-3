@@ -1,6 +1,3 @@
-
-
-
 ;This program counts from 10 to 0
 .ORIG x3000
 LEA R0, TEN  ;This inst will be loaded into memory location x3000

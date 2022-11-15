@@ -4,6 +4,129 @@
 #include <string.h>
 #include <assert.h>
 
+#define ARRAY_MAKE(arr, type)                                         \
+do {                                                                  \
+    (arr)->size = 0;                                                  \
+    (arr)->cap = 8;                                                   \
+    if (((arr)->items = malloc((arr)->cap * sizeof(type))) == NULL) { \
+        perror("malloc");                                             \
+        exit(1);                                                      \
+    }                                                                 \
+} while (0)
+
+#define ARRAY_PUT(arr, type, value)                                      \
+do {                                                                     \
+    if ((arr)->size == (arr)->cap) {                                     \
+        (arr)->cap *= 2;                                                 \
+        (arr)->items = realloc((arr)->items, (arr)->cap * sizeof(type)); \
+        if ((arr)->items == NULL) {                                      \
+            perror("realloc");                                           \
+            exit(1);                                                     \
+        }                                                                \
+    }                                                                    \
+    (arr)->items[(arr)->size++] = value;                                 \
+} while (0)
+
+#define ARRAY_FREE(arr) free((arr)->items)
+
+enum token_kind {
+    T_ERR,
+    T_COMMA,
+    T_NEWLINE,
+
+    T_LABEL,
+
+    T_reg_begin,
+    T_R0,
+    T_R1,
+    T_R2,
+    T_R3,
+    T_R4,
+    T_R5,
+    T_R6,
+    T_R7,
+    T_reg_end,
+
+    T_kwd_begin,
+    T_BR,
+    T_IN,
+
+    T_ADD,
+    T_AND,
+    T_BRN,
+    T_BRZ,
+    T_BRP,
+    T_JMP,
+    T_JSR,
+    T_LDB,
+    T_LDW,
+    T_LEA,
+    T_NOP,
+    T_NOT,
+    T_RET,
+    T_RTI,
+    T_STB,
+    T_STW,
+    T_XOR,
+    T_OUT,
+
+    T_BRNZ,
+    T_BRNP,
+    T_BRZP,
+    T_JSRR,
+    T_LSHF,
+    T_TRAP,
+    T_HALT,
+    T_GETC,
+    T_PUTS,
+
+    T_RSHFL,
+    T_RSHFA,
+    T_BRNZP,
+
+    T_ORIG,
+    T_FILL,
+    T_BLKW,
+    T_STRINGZ,
+    T_END,
+    T_kwd_end,
+
+    T_DECIMAL,
+    T_HEX
+};
+
+struct scanner {
+    char *start;
+    char *curr;
+    size_t line;
+    int add_newline;
+};
+
+struct token {
+    enum token_kind kind;
+    char *lexem;
+    size_t len;
+    size_t line;
+};
+
+struct tokens_array {
+    size_t size;
+    size_t cap;
+    struct token *items;
+};
+
+struct label {
+    char *name;
+    size_t len;
+    size_t addr;
+};
+
+struct labels_array {
+    size_t size;
+    size_t cap;
+    struct label *items;
+};
+
 char *read_file(char *path)
 {
     size_t fsize;
@@ -45,82 +168,6 @@ char *read_file(char *path)
     return src;
 }
 
-enum token_kind {
-    T_COMMA,
-    T_NEWLINE,
-
-    T_LABEL,
-
-    T_BR,
-    T_IN,
-    T_R0,
-    T_R1,
-    T_R2,
-    T_R3,
-    T_R4,
-    T_R5,
-    T_R6,
-    T_R7,
-
-    T_ADD,
-    T_AND,
-    T_BRN,
-    T_BRZ,
-    T_BRP,
-    T_JMP,
-    T_JSR,
-    T_LDB,
-    T_LDW,
-    T_LEA,
-    T_NOP,
-    T_NOT,
-    T_RET,
-    T_RTI,
-    T_STB,
-    T_STW,
-    T_XOR,
-    T_OUT,
-
-    T_BRNZ,
-    T_BRNP,
-    T_BRZP,
-    T_JSRR,
-    T_LSHF,
-    T_TRAP,
-    T_HALT,
-    T_GETC,
-    T_PUTS,
-
-    T_RSHFL,
-    T_RSHFA,
-    T_BRNZP,
-
-    T_ORIG,
-    T_FILL,
-    T_BLKW,
-    T_STRINGZ,
-    T_END,
-
-    T_DECIMAL,
-    T_HEX
-};
-
-struct token {
-    enum token_kind kind;
-    char *start;
-    size_t len;
-    size_t line;
-    int addr_offset;
-};
-
-struct scanner {
-    char *start;
-    char *curr;
-    size_t line;
-    int add_newline;
-    int addr_offset;
-};
-
 int has_chars(struct scanner *s)
 {
     return *s->curr != '\0';
@@ -145,10 +192,9 @@ int next(struct scanner *s, char c)
 void make_token(struct token *t, enum token_kind kind, struct scanner *s)
 {
     t->kind = kind;
-    t->start = s->start;
+    t->lexem = s->start;
     t->len = s->curr - s->start;
     t->line = s->line;
-    t->addr_offset = s->addr_offset;
 
     s->add_newline = 1;
 }
@@ -156,10 +202,23 @@ void make_token(struct token *t, enum token_kind kind, struct scanner *s)
 void make_newline_token(struct token *t, struct scanner *s)
 {
     t->kind = T_NEWLINE;
-    t->start = "\\n";
+    t->lexem = "\\n";
     t->len = 2;
     t->line = s->line;
-    t->addr_offset = s->addr_offset;
+
+    s->add_newline = 0;
+}
+
+void tokens_put(struct tokens_array *ts, struct scanner *s,
+                enum token_kind kind)
+{
+    struct token tmp;
+    if (kind == T_NEWLINE) {
+        make_newline_token(&tmp, s);
+    } else {
+        make_token(&tmp, kind, s);
+    }
+    ARRAY_PUT(ts, struct token, tmp);
 }
 
 int main(void)
@@ -173,14 +232,13 @@ int main(void)
         .start = src,
         .curr = src,
         .line = 1,
-        .add_newline = 0,
-        // @NOTE(art): ignore .orig directive
-        .addr_offset = -2
+        .add_newline = 0
     };
 
-    // @TODO(art): make growable array
-    struct token tokens[50] = {0};
-    size_t tokens_len = 0;
+    // @LEAK(art): let OS free it for now
+    struct tokens_array tokens;
+    ARRAY_MAKE(&tokens, struct token);
+
     int stop_scanning = 0;
 
     for (;;) {
@@ -190,7 +248,7 @@ int main(void)
 
         char c = advance(&s);
 
-        // @NOTE(art): kwd, regs, labels
+        // @NOTE(art): kwds, regs, labels
         if (c != 'x' && isalpha(c)) {
             while (isalnum(peek(&s))) advance(&s);
 
@@ -332,7 +390,7 @@ int main(void)
                 break;
             }
 
-            make_token(&tokens[tokens_len++], kind, &s);
+            tokens_put(&tokens, &s, kind);
             continue;
         }
 
@@ -344,9 +402,7 @@ int main(void)
 
         case '\n':
             if (s.add_newline) {
-                make_newline_token(&tokens[tokens_len++], &s);
-                s.add_newline = 0;
-                s.addr_offset += 2;
+                tokens_put(&tokens, &s, T_NEWLINE);
             }
             s.line += 1;
             break;
@@ -356,7 +412,7 @@ int main(void)
             break;
 
         case ',':
-            make_token(&tokens[tokens_len++], T_COMMA, &s);
+            tokens_put(&tokens, &s, T_COMMA);
             break;
 
         case '#':
@@ -367,7 +423,7 @@ int main(void)
 
             // @TODO(art): handle error
             assert(s.curr - s.start > 0);
-            make_token(&tokens[tokens_len++], T_DECIMAL, &s);
+            tokens_put(&tokens, &s, T_DECIMAL);
             break;
 
         case 'x':
@@ -378,13 +434,13 @@ int main(void)
 
             // @TODO(art): handle error
             assert(s.curr - s.start > 0);
-            make_token(&tokens[tokens_len++], T_HEX, &s);
+            tokens_put(&tokens, &s, T_HEX);
             break;
 
         case '.':
             while (isalnum(peek(&s))) advance(&s);
 
-            enum token_kind kind = -1;
+            enum token_kind kind = T_ERR;
 
             switch (s.curr - s.start) {
             case 4:
@@ -408,21 +464,108 @@ int main(void)
             }
 
             // @TODO(art): handle error
-            assert((int) kind != -1);
-            make_token(&tokens[tokens_len++], kind, &s);
+            assert(kind != T_ERR);
+            tokens_put(&tokens, &s, kind);
             break;
 
         default: printf("Unknown char: '%c'\n", c);
         }
     }
 
-    for (size_t i = 0; i < tokens_len; ++i) {
-        printf("line: %lu ", tokens[i].line);
-        printf("kind: %i ", tokens[i].kind);
-        printf("len: %lu ", tokens[i].len);
-        printf("lex: %.*s ", tokens[i].len, tokens[i].start);
-        printf("offset: %i\n", tokens[i].addr_offset);
+    // @TODO(art): -2 to ignore .orig directive, we assume it always present.
+    // Make it so it does not matter if directive was used, as default address
+    // for user programs is 0x3000.
+    int addr_offset = -2;
+
+    // @LEAK(art): let OS free it for now
+    struct labels_array labels;
+    ARRAY_MAKE(&labels, struct label);
+
+    for (size_t i = 0; i < tokens.size; ++i) {
+        struct token t = tokens.items[i];
+
+        switch (t.kind) {
+        case T_NEWLINE:
+            addr_offset += 2;
+            break;
+
+        case T_LABEL:
+            if (i == 0 || tokens.items[i - 1].kind == T_NEWLINE) {
+                struct label l = {
+                    .name = t.lexem, // @NOTE(art): does not copy value
+                    .len = t.len,
+                    .addr = (size_t) addr_offset
+                };
+                ARRAY_PUT(&labels, struct label, l);
+            }
+            break;
+        }
     }
+
+    //for (size_t i = 0; i < tokens_len; ++i) {
+    //    struct token t = tokens[i++];
+
+    //    if (t.kind == T_LABEL) {
+    //        t = tokens[i++];
+    //    }
+
+    //    if (t.kind < T_kwd_begin || t.kind > T_kwd_end) {
+    //        fprintf(stderr, "[line %lu] expected opcode, but got %.*s\n",
+    //                t.line, t.len, t.start);
+    //        exit(1);
+    //    }
+
+    //    switch (t.kind) {
+    //    case T_ORIG: {
+    //        struct token addr = tokens[i++];
+    //        fprintf(stdout, "0x%.*s\n", addr.len, addr.start);
+    //    } break;
+
+    //    case T_LEA: {
+    //        struct token dest = tokens[i++];
+    //        if (dest.kind < T_reg_begin || dest.kind > T_reg_end) {
+    //            fprintf(stderr, "[line %lu] expected register, but got %.*s\n",
+    //                    dest.line, dest.len, dest.start);
+    //            exit(1);
+    //        }
+
+    //        struct token comma = tokens[i++];
+    //        if (comma.kind != T_COMMA) {
+    //            fprintf(stderr, "[line %lu] expected comma, but got %.*s\n",
+    //                    comma.line, comma.len, comma.start);
+    //            exit(1);
+    //        }
+
+    //        struct token label = tokens[i++];
+    //        if (label.kind != T_LABEL) {
+    //            fprintf(stderr, "[line %lu] expected label, but got %.*s\n",
+    //                    label.line, label.len, label.start);
+    //            exit(1);
+    //        }
+
+    //        struct symtable_item s = {0};
+    //        for (size_t j = 0; j < items_len; ++j) {
+    //            if (label.len == items[j].len &&
+    //                    memcmp(items[j].sym, label.start, label.len) == 0) {
+    //                s = items[j];
+    //            }
+    //        }
+
+    //        fprintf(stdout, "\n");
+    //    } break;
+
+    //    default:
+    //        fprintf(stderr, "[line %lu] unknown token %.*s\n",
+    //                t.line, t.len, t.start);
+    //        exit(1);
+    //    }
+
+    //    if (tokens[i].kind != T_NEWLINE) {
+    //        fprintf(stderr, "[line %lu] expected new line, but got %.*s\n",
+    //                t.line, t.len, t.start);
+    //        exit(1);
+    //    }
+    //}
 
     return 0;
 }
