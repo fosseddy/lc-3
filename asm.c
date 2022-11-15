@@ -110,6 +110,7 @@ struct token {
     char *start;
     size_t len;
     size_t line;
+    int addr_offset;
 };
 
 struct scanner {
@@ -117,6 +118,7 @@ struct scanner {
     char *curr;
     size_t line;
     int add_newline;
+    int addr_offset;
 };
 
 int has_chars(struct scanner *s)
@@ -146,6 +148,7 @@ void make_token(struct token *t, enum token_kind kind, struct scanner *s)
     t->start = s->start;
     t->len = s->curr - s->start;
     t->line = s->line;
+    t->addr_offset = s->addr_offset;
 
     s->add_newline = 1;
 }
@@ -156,6 +159,7 @@ void make_newline_token(struct token *t, struct scanner *s)
     t->start = "\\n";
     t->len = 2;
     t->line = s->line;
+    t->addr_offset = s->addr_offset;
 }
 
 int main(void)
@@ -169,7 +173,9 @@ int main(void)
         .start = src,
         .curr = src,
         .line = 1,
-        .add_newline = 0
+        .add_newline = 0,
+        // @NOTE(art): ignore .orig directive
+        .addr_offset = -2
     };
 
     // @TODO(art): make growable array
@@ -340,6 +346,7 @@ int main(void)
             if (s.add_newline) {
                 make_newline_token(&tokens[tokens_len++], &s);
                 s.add_newline = 0;
+                s.addr_offset += 2;
             }
             s.line += 1;
             break;
@@ -403,7 +410,6 @@ int main(void)
             // @TODO(art): handle error
             assert((int) kind != -1);
             make_token(&tokens[tokens_len++], kind, &s);
-
             break;
 
         default: printf("Unknown char: '%c'\n", c);
@@ -414,7 +420,8 @@ int main(void)
         printf("line: %lu ", tokens[i].line);
         printf("kind: %i ", tokens[i].kind);
         printf("len: %lu ", tokens[i].len);
-        printf("lex: %.*s\n", tokens[i].len, tokens[i].start);
+        printf("lex: %.*s ", tokens[i].len, tokens[i].start);
+        printf("offset: %i\n", tokens[i].addr_offset);
     }
 
     return 0;
