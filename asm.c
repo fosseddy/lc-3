@@ -222,6 +222,29 @@ void tokens_put(struct tokens_array *ts, struct scanner *s,
     ARRAY_PUT(ts, struct token, tmp);
 }
 
+void skip_whitespace(struct scanner *s, struct tokens_array *ts)
+{
+    for (;;) {
+        switch (peek(s)) {
+        case ' ':
+        case '\t':
+        case '\r':
+            advance(s);
+            break;
+
+        case '\n':
+            s->line++;
+            if (s->add_newline) {
+                tokens_put(ts, s, T_NEWLINE);
+            }
+            advance(s);
+            break;
+
+        default: return;
+        }
+    }
+}
+
 int main(void)
 {
     // @LEAK(art): let OS free it for now
@@ -243,10 +266,10 @@ int main(void)
     int stop_scanning = 0;
 
     for (;;) {
-        s.start = s.curr;
-
+        skip_whitespace(&s, &tokens);
         if (!has_chars(&s) || stop_scanning) break;
 
+        s.start = s.curr;
         char c = advance(&s);
 
         // @NOTE(art): kwds, regs, labels
@@ -403,20 +426,8 @@ int main(void)
         }
 
         switch (c) {
-        case ' ':
-        case '\t':
-        case '\r':
-            break;
-
-        case '\n':
-            if (s.add_newline) {
-                tokens_put(&tokens, &s, T_NEWLINE);
-            }
-            s.line += 1;
-            break;
-
         case ';':
-            while (!next(&s, '\n') && has_chars(&s)) advance(&s);
+            while (!next(&s, '\n')) advance(&s);
             break;
 
         case ',':
