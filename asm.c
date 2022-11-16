@@ -48,7 +48,7 @@ enum token_kind {
     T_R7,
     T_reg_end,
 
-    T_kwd_begin,
+    T_opcode_begin,
     T_BR,
     T_IN,
 
@@ -90,7 +90,7 @@ enum token_kind {
     T_BLKW,
     T_STRINGZ,
     T_END,
-    T_kwd_end,
+    T_opcode_end,
 
     T_DECIMAL,
     T_HEX
@@ -126,6 +126,11 @@ struct labels_array {
     size_t size;
     size_t cap;
     struct label *items;
+};
+
+struct parser {
+    struct tokens_array tokens;
+    size_t curr;
 };
 
 char *read_file(char *path)
@@ -245,8 +250,56 @@ void skip_whitespace(struct scanner *s, struct tokens_array *ts)
     }
 }
 
+int is_opcode(enum token_kind kind)
+{
+    return kind > T_opcode_begin && kind < T_opcode_end;
+}
+
+int is_reg(enum token_kind kind)
+{
+    return kind > T_reg_begin && kind < T_reg_end;
+}
+
+void report_parser_error(struct token *t, char *msg)
+{
+    fprintf(stderr, "[line %lu] at %.*s: %s\n",
+            t->line, t->len, t->lexem, msg);
+}
+
+int has_tokens(struct parser *p)
+{
+    return p->curr < p->tokens.size;
+}
+
+struct token peek_token(struct parser *p)
+{
+    return p->tokens.items[p->curr];
+}
+
+struct token advance_token(struct parser *p)
+{
+    return p->tokens.items[p->curr++];
+}
+
+struct token consume_token(struct parser *p, enum token_kind kind, char *err)
+{
+    struct token t = peek_token(p);
+    if (t.kind != kind) {
+        report_parser_error(&t, err);
+        t.kind = T_ERR;
+        return t;
+    }
+    return advance_token(p);
+}
+
+void sync_parser(struct parser *p)
+{
+    while (has_tokens(p) && advance_token(p).kind != T_NEWLINE);
+}
+
 int main(void)
 {
+    // @TODO(art): get filepath from args
     // @LEAK(art): let OS free it for now
     char *src = read_file("./ex.asm");
 
@@ -435,24 +488,16 @@ int main(void)
             break;
 
         case '#':
-            s.start++;
-
             if (next(&s, '-')) advance(&s);
             while (isdigit(peek(&s))) advance(&s);
 
-            // @TODO(art): handle error
-            assert(s.curr - s.start > 0);
             tokens_put(&tokens, &s, T_DECIMAL);
             break;
 
         case 'x':
-            s.start++;
-
             if (next(&s, '-')) advance(&s);
             while (isxdigit(peek(&s))) advance(&s);
 
-            // @TODO(art): handle error
-            assert(s.curr - s.start > 0);
             tokens_put(&tokens, &s, T_HEX);
             break;
 
@@ -519,13 +564,30 @@ int main(void)
         }
     }
 
-    //for (size_t i = 0; i < tokens_len; ++i) {
-    //    struct token t = tokens[i++];
+    struct parser p = {
+        .tokens = tokens,
+        .curr = 0
+    };
 
-    //    if (t.kind == T_LABEL) {
-    //        t = tokens[i++];
-    //    }
+    for (;;) {
+        if (!has_tokens(&p)) break;
 
+        struct token label = {0};
+        struct token opcode = {0};
+
+        if (peek_token(&p).kind == T_LABEL) {
+            label = advance_token(&p);
+        }
+
+        opcode = advance_token(&p);
+        if (!is_opcode(opcode.kind)) {
+            report_parser_error(&opcode, "expected opcode");
+            sync_parser(&p);
+            continue;
+        }
+    }
+
+    //{
     //    if (t.kind < T_kwd_begin || t.kind > T_kwd_end) {
     //        fprintf(stderr, "[line %lu] expected opcode, but got %.*s\n",
     //                t.line, t.len, t.start);
