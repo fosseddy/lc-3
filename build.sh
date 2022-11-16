@@ -3,7 +3,7 @@
 set -xe
 
 if [ "$1" = "clean" ]; then
-    rm asm lc3
+    rm -fv asm lc3
     exit 0
 fi
 
