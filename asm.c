@@ -4,30 +4,29 @@
 #include <string.h>
 #include <assert.h>
 
-#define ARRAY_MAKE(arr, type)                                         \
-do {                                                                  \
-    (arr)->size = 0;                                                  \
-    (arr)->cap = 8;                                                   \
-    if (((arr)->items = malloc((arr)->cap * sizeof(type))) == NULL) { \
-        perror("malloc");                                             \
-        exit(1);                                                      \
-    }                                                                 \
+#define MEM_MAKE(mem, type)                                         \
+do {                                                                \
+    (mem)->size = 0;                                                \
+    (mem)->cap = 8;                                                 \
+    if (((mem)->buf = malloc((mem)->cap * sizeof(type))) == NULL) { \
+        perror("malloc");                                           \
+        exit(1);                                                    \
+    }                                                               \
 } while (0)
 
-#define ARRAY_PUT(arr, type, value)                                      \
-do {                                                                     \
-    if ((arr)->size == (arr)->cap) {                                     \
-        (arr)->cap *= 2;                                                 \
-        (arr)->items = realloc((arr)->items, (arr)->cap * sizeof(type)); \
-        if ((arr)->items == NULL) {                                      \
-            perror("realloc");                                           \
-            exit(1);                                                     \
-        }                                                                \
-    }                                                                    \
-    (arr)->items[(arr)->size++] = value;                                 \
+#define MEM_GROW(mem, type)                                          \
+do {                                                                 \
+    if ((mem)->size == (mem)->cap) {                                 \
+        (mem)->cap *= 2;                                             \
+        (mem)->buf = realloc((mem)->buf, (mem)->cap * sizeof(type)); \
+        if ((mem)->buf == NULL) {                                    \
+            perror("realloc");                                       \
+            exit(1);                                                 \
+        }                                                            \
+    }                                                                \
 } while (0)
 
-#define ARRAY_FREE(arr) free((arr)->items)
+#define MEM_FREE(mem) free((mem)->buf)
 
 enum token_kind {
     T_ERR,
@@ -112,7 +111,7 @@ struct token {
 struct tokens_array {
     size_t size;
     size_t cap;
-    struct token *items;
+    struct token *buf;
 };
 
 struct label {
@@ -124,7 +123,7 @@ struct label {
 struct labels_array {
     size_t size;
     size_t cap;
-    struct label *items;
+    struct label *buf;
 };
 
 struct parser {
@@ -194,7 +193,7 @@ int next(struct scanner *s, char c)
     return peek(s) == c;
 }
 
-void make_token(struct token *t, enum token_kind kind, struct scanner *s)
+void make_token(struct scanner *s, struct token *t, enum token_kind kind)
 {
     t->kind = kind;
     t->lexem = s->start;
@@ -204,7 +203,7 @@ void make_token(struct token *t, enum token_kind kind, struct scanner *s)
     s->add_newline = 1;
 }
 
-void make_newline_token(struct token *t, struct scanner *s)
+void make_newline_token(struct scanner *s, struct token *t)
 {
     t->kind = T_NEWLINE;
     t->lexem = "\\n";
@@ -214,16 +213,18 @@ void make_newline_token(struct token *t, struct scanner *s)
     s->add_newline = 0;
 }
 
-void tokens_put(struct tokens_array *ts, struct scanner *s,
-                enum token_kind kind)
+void tokens_put(struct tokens_array *ts, enum token_kind kind,
+        struct scanner *s)
 {
-    struct token tmp;
+    MEM_GROW(ts, struct token);
+
+    struct token *t = ts->buf + ts->size;
     if (kind == T_NEWLINE) {
-        make_newline_token(&tmp, s);
+        make_newline_token(s, t);
     } else {
-        make_token(&tmp, kind, s);
+        make_token(s, t, kind);
     }
-    ARRAY_PUT(ts, struct token, tmp);
+    ts->size++;
 }
 
 void skip_whitespace(struct scanner *s, struct tokens_array *ts)
@@ -239,7 +240,7 @@ void skip_whitespace(struct scanner *s, struct tokens_array *ts)
         case '\n':
             s->line++;
             if (s->add_newline) {
-                tokens_put(ts, s, T_NEWLINE);
+                tokens_put(ts, T_NEWLINE, s);
             }
             advance(s);
             break;
@@ -266,12 +267,12 @@ int has_tokens(struct parser *p)
 
 struct token peek_token(struct parser *p)
 {
-    return p->tokens.items[p->curr];
+    return p->tokens.buf[p->curr];
 }
 
 struct token advance_token(struct parser *p)
 {
-    return p->tokens.items[p->curr++];
+    return p->tokens.buf[p->curr++];
 }
 
 void report_parser_error(struct token *t, char *msg)
@@ -302,7 +303,7 @@ int main(void)
 
     // @LEAK(art): let OS free it for now
     struct tokens_array tokens;
-    ARRAY_MAKE(&tokens, struct token);
+    MEM_MAKE(&tokens, struct token);
 
     int stop_scanning = 0;
 
@@ -457,12 +458,12 @@ int main(void)
 
             if (kind == T_IDENT) {
                 if (tokens.size == 0 ||
-                        tokens.items[tokens.size - 1].kind == T_NEWLINE) {
+                        tokens.buf[tokens.size - 1].kind == T_NEWLINE) {
                     kind = T_LABEL;
                 }
             }
 
-            tokens_put(&tokens, &s, kind);
+            tokens_put(&tokens, kind, &s);
             continue;
         }
 
@@ -472,21 +473,21 @@ int main(void)
             break;
 
         case ',':
-            tokens_put(&tokens, &s, T_COMMA);
+            tokens_put(&tokens, T_COMMA, &s);
             break;
 
         case '#':
             if (next(&s, '-')) advance(&s);
             while (isdigit(peek(&s))) advance(&s);
 
-            tokens_put(&tokens, &s, T_DECIMAL);
+            tokens_put(&tokens, T_DECIMAL, &s);
             break;
 
         case 'x':
             if (next(&s, '-')) advance(&s);
             while (isxdigit(peek(&s))) advance(&s);
 
-            tokens_put(&tokens, &s, T_HEX);
+            tokens_put(&tokens, T_HEX, &s);
             break;
 
         case '.':
@@ -517,7 +518,7 @@ int main(void)
 
             // @TODO(art): handle error
             assert(kind != T_ERR);
-            tokens_put(&tokens, &s, kind);
+            tokens_put(&tokens, kind, &s);
             break;
 
         default: printf("Unknown char: '%c'\n", c);
@@ -531,10 +532,10 @@ int main(void)
 
     // @LEAK(art): let OS free it for now
     struct labels_array labels;
-    ARRAY_MAKE(&labels, struct label);
+    MEM_MAKE(&labels, struct label);
 
     for (size_t i = 0; i < tokens.size; ++i) {
-        struct token t = tokens.items[i];
+        struct token t = tokens.buf[i];
 
         switch (t.kind) {
         case T_NEWLINE:
@@ -542,12 +543,12 @@ int main(void)
             break;
 
         case T_LABEL:;
-            struct label l = {
+            MEM_GROW(&labels, struct label);
+            labels.buf[labels.size++] = (struct label) {
                 .name = t.lexem,
                 .len = t.len,
                 .addr = (size_t) addr_offset
             };
-            ARRAY_PUT(&labels, struct label, l);
             break;
         }
     }
