@@ -89,7 +89,6 @@ enum token_kind {
     T_FILL,
     T_BLKW,
     T_STRINGZ,
-    T_END,
     T_opcode_end,
 
     T_DECIMAL,
@@ -260,12 +259,6 @@ int is_reg(enum token_kind kind)
     return kind > T_reg_begin && kind < T_reg_end;
 }
 
-void report_parser_error(struct token *t, char *msg)
-{
-    fprintf(stderr, "[line %lu] at %.*s: %s\n",
-            t->line, t->len, t->lexem, msg);
-}
-
 int has_tokens(struct parser *p)
 {
     return p->curr < p->tokens.size;
@@ -281,15 +274,10 @@ struct token advance_token(struct parser *p)
     return p->tokens.items[p->curr++];
 }
 
-struct token consume_token(struct parser *p, enum token_kind kind, char *err)
+void report_parser_error(struct token *t, char *msg)
 {
-    struct token t = peek_token(p);
-    if (t.kind != kind) {
-        report_parser_error(&t, err);
-        t.kind = T_ERR;
-        return t;
-    }
-    return advance_token(p);
+    fprintf(stderr, "[line %lu] at %.*s: %s\n",
+            t->line, t->len, t->lexem, msg);
 }
 
 void sync_parser(struct parser *p)
@@ -509,8 +497,8 @@ int main(void)
             switch (s.curr - s.start) {
             case 4:
                 if (memcmp(s.start + 1, "end", 3) == 0) {
-                    kind = T_END;
                     stop_scanning = 1;
+                    continue;
                 }
                 break;
             case 5:
@@ -569,9 +557,7 @@ int main(void)
         .curr = 0
     };
 
-    for (;;) {
-        if (!has_tokens(&p)) break;
-
+    while (has_tokens(&p)) {
         struct token label = {0};
         struct token opcode = {0};
 
@@ -585,66 +571,26 @@ int main(void)
             sync_parser(&p);
             continue;
         }
+
+        switch (opcode.kind) {
+        case T_ORIG:;
+            struct token addr = advance_token(&p);
+            if (addr.kind != T_HEX && addr.kind != T_DECIMAL) {
+                report_parser_error(&addr, "expected address number");
+                sync_parser(&p);
+                continue;
+            }
+            break;
+
+        }
+
+        struct token nl = advance_token(&p);
+        if (nl.kind != T_NEWLINE) {
+            report_parser_error(&nl, "expected new line after instruction");
+            sync_parser(&p);
+            continue;
+        }
     }
-
-    //{
-    //    if (t.kind < T_kwd_begin || t.kind > T_kwd_end) {
-    //        fprintf(stderr, "[line %lu] expected opcode, but got %.*s\n",
-    //                t.line, t.len, t.start);
-    //        exit(1);
-    //    }
-
-    //    switch (t.kind) {
-    //    case T_ORIG: {
-    //        struct token addr = tokens[i++];
-    //        fprintf(stdout, "0x%.*s\n", addr.len, addr.start);
-    //    } break;
-
-    //    case T_LEA: {
-    //        struct token dest = tokens[i++];
-    //        if (dest.kind < T_reg_begin || dest.kind > T_reg_end) {
-    //            fprintf(stderr, "[line %lu] expected register, but got %.*s\n",
-    //                    dest.line, dest.len, dest.start);
-    //            exit(1);
-    //        }
-
-    //        struct token comma = tokens[i++];
-    //        if (comma.kind != T_COMMA) {
-    //            fprintf(stderr, "[line %lu] expected comma, but got %.*s\n",
-    //                    comma.line, comma.len, comma.start);
-    //            exit(1);
-    //        }
-
-    //        struct token label = tokens[i++];
-    //        if (label.kind != T_LABEL) {
-    //            fprintf(stderr, "[line %lu] expected label, but got %.*s\n",
-    //                    label.line, label.len, label.start);
-    //            exit(1);
-    //        }
-
-    //        struct symtable_item s = {0};
-    //        for (size_t j = 0; j < items_len; ++j) {
-    //            if (label.len == items[j].len &&
-    //                    memcmp(items[j].sym, label.start, label.len) == 0) {
-    //                s = items[j];
-    //            }
-    //        }
-
-    //        fprintf(stdout, "\n");
-    //    } break;
-
-    //    default:
-    //        fprintf(stderr, "[line %lu] unknown token %.*s\n",
-    //                t.line, t.len, t.start);
-    //        exit(1);
-    //    }
-
-    //    if (tokens[i].kind != T_NEWLINE) {
-    //        fprintf(stderr, "[line %lu] expected new line, but got %.*s\n",
-    //                t.line, t.len, t.start);
-    //        exit(1);
-    //    }
-    //}
 
     return 0;
 }
