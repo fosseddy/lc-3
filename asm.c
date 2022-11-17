@@ -558,16 +558,15 @@ int main(void)
     };
 
     while (has_tokens(&p)) {
-        struct token label = {0};
-        struct token opcode = {0};
+        struct token opcode;
 
         if (peek_token(&p).kind == T_LABEL) {
-            label = advance_token(&p);
+            advance_token(&p);
         }
 
         opcode = advance_token(&p);
         if (!is_opcode(opcode.kind)) {
-            report_parser_error(&opcode, "expected opcode");
+            report_parser_error(&opcode, "unknown instruction");
             sync_parser(&p);
             continue;
         }
@@ -584,12 +583,13 @@ int main(void)
 
         }
 
-        struct token nl = advance_token(&p);
+        struct token nl = peek_token(&p);
         if (nl.kind != T_NEWLINE) {
             report_parser_error(&nl, "expected new line after instruction");
             sync_parser(&p);
             continue;
         }
+        advance_token(&p);
     }
 
     return 0;
