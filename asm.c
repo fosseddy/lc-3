@@ -83,12 +83,14 @@ enum token_kind {
     T_RSHFL,
     T_RSHFA,
     T_BRNZP,
+    T_opcode_end,
 
+    T_directive_begin,
     T_ORIG,
     T_FILL,
     T_BLKW,
     T_STRINGZ,
-    T_opcode_end,
+    T_directive_end,
 
     T_DECIMAL,
     T_HEX
@@ -127,7 +129,7 @@ struct labels_array {
 };
 
 struct parser {
-    struct tokens_array tokens;
+    struct tokens_array *tokens;
     size_t curr;
 };
 
@@ -255,6 +257,11 @@ int is_opcode(enum token_kind kind)
     return kind > T_opcode_begin && kind < T_opcode_end;
 }
 
+int is_directive(enum token_kind kind)
+{
+    return kind > T_directive_begin && kind < T_directive_end;
+}
+
 int is_reg(enum token_kind kind)
 {
     return kind > T_reg_begin && kind < T_reg_end;
@@ -262,17 +269,19 @@ int is_reg(enum token_kind kind)
 
 int has_tokens(struct parser *p)
 {
-    return p->curr < p->tokens.size;
+    return p->curr < p->tokens->size;
 }
 
-struct token peek_token(struct parser *p)
+struct token *peek_token(struct parser *p)
 {
-    return p->tokens.buf[p->curr];
+    return p->tokens->buf + p->curr;
 }
 
-struct token advance_token(struct parser *p)
+struct token *advance_token(struct parser *p)
 {
-    return p->tokens.buf[p->curr++];
+    struct token *t = peek_token(p);
+    p->curr++;
+    return t;
 }
 
 void report_parser_error(struct token *t, char *msg)
@@ -283,7 +292,7 @@ void report_parser_error(struct token *t, char *msg)
 
 void sync_parser(struct parser *p)
 {
-    while (has_tokens(p) && advance_token(p).kind != T_NEWLINE);
+    while (has_tokens(p) && advance_token(p)->kind != T_NEWLINE);
 }
 
 int main(void)
@@ -554,29 +563,27 @@ int main(void)
     }
 
     struct parser p = {
-        .tokens = tokens,
+        .tokens = &tokens,
         .curr = 0
     };
 
     while (has_tokens(&p)) {
-        struct token opcode;
-
-        if (peek_token(&p).kind == T_LABEL) {
+        if (peek_token(&p)->kind == T_LABEL) {
             advance_token(&p);
         }
 
-        opcode = advance_token(&p);
-        if (!is_opcode(opcode.kind)) {
-            report_parser_error(&opcode, "unknown instruction");
+        struct token *opcode = advance_token(&p);
+        if (!is_opcode(opcode->kind) && !is_directive(opcode->kind)) {
+            report_parser_error(opcode, "unknown instruction");
             sync_parser(&p);
             continue;
         }
 
-        switch (opcode.kind) {
+        switch (opcode->kind) {
         case T_ORIG:;
-            struct token addr = advance_token(&p);
-            if (addr.kind != T_HEX && addr.kind != T_DECIMAL) {
-                report_parser_error(&addr, "expected address number");
+            struct token *addr = advance_token(&p);
+            if (addr->kind != T_HEX && addr->kind != T_DECIMAL) {
+                report_parser_error(addr, "expected address number");
                 sync_parser(&p);
                 continue;
             }
@@ -584,9 +591,9 @@ int main(void)
 
         }
 
-        struct token nl = peek_token(&p);
-        if (nl.kind != T_NEWLINE) {
-            report_parser_error(&nl, "expected new line after instruction");
+        struct token *nl = peek_token(&p);
+        if (nl->kind != T_NEWLINE) {
+            report_parser_error(nl, "expected new line after instruction");
             sync_parser(&p);
             continue;
         }
