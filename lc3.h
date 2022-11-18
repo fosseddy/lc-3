@@ -1,7 +1,7 @@
 #ifndef LC3_H
 #define LC3_H
 
-enum reg {
+enum lc3_reg {
     R_R0 = 0,
     R_R1,
     R_R2,
@@ -17,7 +17,7 @@ enum reg {
     R_COUNT
 };
 
-enum {
+enum lc3_opcode {
     OP_BR = 0,
     OP_ADD,
     OP_LDB,

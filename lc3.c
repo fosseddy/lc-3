@@ -8,7 +8,7 @@
 typedef unsigned short u16;
 typedef unsigned char u8;
 
-enum {
+enum condition_codes {
     CC_P = 0x1,
     CC_Z = 0x2,
     CC_N = 0x4
@@ -56,15 +56,20 @@ void mem_writew(u16 w, u16 addr)
 // @TODO(art): proper halting
 int main(void)
 {
-    size_t psz = 0;
-    u16 program[10] = {0};
+    FILE *f = fopen("out.obj", "r");
+    if (f == NULL) {
+        perror("fopen");
+        return 1;
+    }
 
-    program[psz++] = OP_BR << 12 | R_R0 << 9 | 13;
-    program[psz++] = 69;
-
-    for (size_t i = 0, j = 0; i < psz; ++i, j += 2) {
-        memory[j] = program[i] & 0xFF;
-        memory[j + 1] = program[i] >> 8;
+    // @NOTE(art): we expect first instruction to be starting address
+    fscanf(f, "%x", regs + R_PC);
+    // @TODO(art): better parsing?
+    u16 op;
+    u8 *ptr = memory + regs[R_PC];
+    while (fscanf(f, "%x", &op) != EOF) {
+        *ptr++ = op & 0xFF;
+        *ptr++ = op >> 8;
     }
 
     u16 inst;

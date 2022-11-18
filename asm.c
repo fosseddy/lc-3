@@ -307,7 +307,7 @@ void sync_parser(struct parser *p)
     while (has_tokens(p) && advance_token(p)->kind != T_NEWLINE);
 }
 
-enum reg get_reg(enum token_kind kind)
+enum lc3_reg get_reg(enum token_kind kind)
 {
     switch (kind) {
     case T_R0: return R_R0;
@@ -648,6 +648,10 @@ int main(void)
         .curr = 0
     };
 
+    FILE *out = fopen("out.obj", "w");
+    // @TODO(art): handle error
+    assert(out != NULL);
+
     while (has_tokens(&p)) {
         if (peek_token(&p)->kind == T_LABEL) {
             advance_token(&p);
@@ -660,7 +664,7 @@ int main(void)
         case T_ORIG:;
             struct token *addr = consume_num(&p);
             if (!addr) continue;
-            fprintf(stdout, "0x%04x\n", addr->lit);
+            fprintf(out, "0x%04x\n", addr->lit);
             break;
 
         case T_ADD:
@@ -690,13 +694,17 @@ int main(void)
                 op |= src2->lit;
             }
 
-            fprintf(stdout, "0x%04x\n", op);
+            fprintf(out, "0x%04x\n", op);
             break;
         }
 
         if (!consume(&p, T_NEWLINE, "expected new line after instruction"))
             continue;
     }
+
+    // @TODO(art): hack for halting, remove later
+    fprintf(out, "0x45\n");
+    fflush(out);
 
     return 0;
 }
