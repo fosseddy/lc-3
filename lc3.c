@@ -1,50 +1,17 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "lc3.h"
+
 #define MEMORY_CAP (1 << 16)
 
 typedef unsigned short u16;
 typedef unsigned char u8;
 
 enum {
-    R_R0 = 0,
-    R_R1,
-    R_R2,
-    R_R3,
-    R_R4,
-    R_R5,
-    R_R6,
-    R_R7,
-
-    R_PC,
-    R_PSR,
-
-    R_COUNT
-};
-
-enum {
     CC_P = 0x1,
     CC_Z = 0x2,
     CC_N = 0x4
-};
-
-enum {
-    OP_BR = 0,
-    OP_ADD,
-    OP_LDB,
-    OP_STB,
-    OP_JSR, // @TODO(art): not implemented
-    OP_AND,
-    OP_LDW,
-    OP_STW,
-    OP_RTI, // @TODO(art): not implemented
-    OP_XOR,
-    OP_RESERVED3,
-    OP_RESERVED4,
-    OP_JMP,
-    OP_SHF,
-    OP_LEA,
-    OP_TRAP // @TODO(art): not implemented
 };
 
 static u16 regs[R_COUNT] = {0};
