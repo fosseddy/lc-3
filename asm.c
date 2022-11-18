@@ -196,6 +196,21 @@ int next(struct scanner *s, char c)
     return peek(s) == c;
 }
 
+int is_instruction(enum token_kind kind)
+{
+    return kind > T_instruction_begin && kind < T_instruction_end;
+}
+
+int is_reg(enum token_kind kind)
+{
+    return kind > T_reg_begin && kind < T_reg_end;
+}
+
+int is_num(enum token_kind kind)
+{
+    return kind == T_DECIMAL || kind == T_HEX;
+}
+
 void make_token(struct scanner *s, struct token *t, enum token_kind kind)
 {
     t->kind = kind;
@@ -203,7 +218,7 @@ void make_token(struct scanner *s, struct token *t, enum token_kind kind)
     t->len = s->curr - s->start;
     t->line = s->line;
 
-    if (kind == T_DECIMAL || kind == T_HEX) {
+    if (is_num(kind)) {
         int base = 10;
         if (kind == T_HEX) {
             base = 16;
@@ -262,21 +277,6 @@ void skip_whitespace(struct scanner *s, struct tokens_array *ts)
         default: return;
         }
     }
-}
-
-int is_instruction(enum token_kind kind)
-{
-    return kind > T_instruction_begin && kind < T_instruction_end;
-}
-
-int is_reg(enum token_kind kind)
-{
-    return kind > T_reg_begin && kind < T_reg_end;
-}
-
-int is_num(enum token_kind kind)
-{
-    return kind == T_DECIMAL || kind == T_HEX;
 }
 
 int has_tokens(struct parser *p)
