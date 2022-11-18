@@ -544,9 +544,9 @@ int main(void)
     MEM_MAKE(&labels, struct label);
 
     for (size_t i = 0; i < tokens.size; ++i) {
-        struct token t = tokens.buf[i];
+        struct token *t = tokens.buf + tokens.size;
 
-        switch (t.kind) {
+        switch (t->kind) {
         case T_NEWLINE:
             addr_offset += 2;
             break;
@@ -554,8 +554,8 @@ int main(void)
         case T_LABEL:;
             MEM_GROW(&labels, struct label);
             labels.buf[labels.size++] = (struct label) {
-                .name = t.lexem,
-                .len = t.len,
+                .name = t->lexem,
+                .len = t->len,
                 .addr = (size_t) addr_offset
             };
             break;
