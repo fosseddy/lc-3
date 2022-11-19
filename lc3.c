@@ -8,14 +8,14 @@
 typedef unsigned short u16;
 typedef unsigned char u8;
 
-enum condition_codes {
+enum {
     CC_P = 0x1,
     CC_Z = 0x2,
     CC_N = 0x4
 };
 
-static u16 regs[R_COUNT] = {0};
-static u8 memory[MEMORY_CAP] = {0};
+static u16 regs[R_COUNT];
+static u8 memory[MEMORY_CAP];
 
 u16 sext(u16 value, size_t bit_len)
 {
@@ -45,13 +45,13 @@ u16 mem_readw(u16 idx)
     return memory[idx + 1] << 8 | memory[idx];
 }
 
-void mem_writew(u16 w, u16 addr)
+void mem_writew(u16 w, u16 offset)
 {
-    memory[addr] = w & 0xFF;
-    memory[addr + 1] = w >> 8;
+    memory[offset] = w & 0xFF;
+    memory[offset + 1] = w >> 8;
 }
 
-// @TODO(art): proper ojbect file loading
+// @TODO(art): proper object file loading
 // @TODO(art): init memory, PC, etc
 // @TODO(art): proper halting
 int main(void)
@@ -64,12 +64,12 @@ int main(void)
 
     // @NOTE(art): we expect first instruction to be starting address
     fscanf(f, "%x", regs + R_PC);
-    // @TODO(art): better parsing?
     u16 op;
-    u8 *ptr = memory + regs[R_PC];
+    u16 offset = regs[R_PC];
+    // @TODO(art): better parsing?
     while (fscanf(f, "%x", &op) != EOF) {
-        *ptr++ = op & 0xFF;
-        *ptr++ = op >> 8;
+        mem_writew(op, offset);
+        offset += 2;
     }
 
     u16 inst;

@@ -1,6 +1,7 @@
 .orig x3000
 and r0, r0, #0
 add r0, r0, #6
+halt
 .end
 
 ;This program counts from 10 to 0

@@ -129,7 +129,7 @@ struct labels_array {
     struct label *buf;
 };
 
-struct parser {
+struct compiler {
     struct tokens_array *tokens;
     size_t curr;
 };
@@ -279,32 +279,32 @@ void skip_whitespace(struct scanner *s, struct tokens_array *ts)
     }
 }
 
-int has_tokens(struct parser *p)
+int has_tokens(struct compiler *c)
 {
-    return p->curr < p->tokens->size;
+    return c->curr < c->tokens->size;
 }
 
-struct token *peek_token(struct parser *p)
+struct token *peek_token(struct compiler *c)
 {
-    return p->tokens->buf + p->curr;
+    return c->tokens->buf + c->curr;
 }
 
-struct token *advance_token(struct parser *p)
+struct token *advance_token(struct compiler *c)
 {
-    struct token *t = peek_token(p);
-    if (has_tokens(p)) p->curr++;
+    struct token *t = peek_token(c);
+    if (has_tokens(c)) c->curr++;
     return t;
 }
 
-void report_parser_error(struct token *t, char *msg)
+void report_compiler_error(struct token *t, char *msg)
 {
     fprintf(stderr, "[line %lu] at %.*s: %s\n",
             t->line, t->len, t->lexem, msg);
 }
 
-void sync_parser(struct parser *p)
+void sync_compiler(struct compiler *c)
 {
-    while (has_tokens(p) && advance_token(p)->kind != T_NEWLINE);
+    while (has_tokens(c) && advance_token(c)->kind != T_NEWLINE);
 }
 
 enum lc3_reg get_reg(enum token_kind kind)
@@ -321,56 +321,45 @@ enum lc3_reg get_reg(enum token_kind kind)
     }
 }
 
-struct token *consume(struct parser *p, enum token_kind kind, char *msg)
+struct token *consume(struct compiler *c, enum token_kind kind, char *msg)
 {
-    struct token *t = advance_token(p);
+    struct token *t = advance_token(c);
     if (t->kind != kind) {
-        report_parser_error(t, msg);
-        sync_parser(p);
+        report_compiler_error(t, msg);
+        sync_compiler(c);
         return NULL;
     }
     return t;
 }
 
-struct token *consume_instruction(struct parser *p)
+struct token *consume_reg(struct compiler *c)
 {
-    struct token *t = advance_token(p);
-    if (!is_instruction(t->kind)) {
-        report_parser_error(t, "unknown instruction");
-        sync_parser(p);
-        return NULL;
-    }
-    return t;
-}
-
-struct token *consume_reg(struct parser *p)
-{
-    struct token *t = advance_token(p);
+    struct token *t = advance_token(c);
     if (!is_reg(t->kind)) {
-        report_parser_error(t, "expected register");
-        sync_parser(p);
+        report_compiler_error(t, "expected register");
+        sync_compiler(c);
         return NULL;
     }
     return t;
 }
 
-struct token *consume_num(struct parser *p)
+struct token *consume_num(struct compiler *c)
 {
-    struct token *t = advance_token(p);
+    struct token *t = advance_token(c);
     if (!is_num(t->kind)) {
-        report_parser_error(t, "expected number");
-        sync_parser(p);
+        report_compiler_error(t, "expected number");
+        sync_compiler(c);
         return NULL;
     }
     return t;
 }
 
-struct token *consume_reg_or_num(struct parser *p)
+struct token *consume_reg_or_num(struct compiler *c)
 {
-    struct token *t = advance_token(p);
+    struct token *t = advance_token(c);
     if (!is_reg(t->kind) && !is_num(t->kind)) {
-        report_parser_error(t, "expected register or number");
-        sync_parser(p);
+        report_compiler_error(t, "expected register or number");
+        sync_compiler(c);
         return NULL;
     }
     return t;
@@ -643,7 +632,7 @@ int main(void)
         }
     }
 
-    struct parser p = {
+    struct compiler c = {
         .tokens = &tokens,
         .curr = 0
     };
@@ -652,17 +641,22 @@ int main(void)
     // @TODO(art): handle error
     assert(out != NULL);
 
-    while (has_tokens(&p)) {
-        if (peek_token(&p)->kind == T_LABEL) {
-            advance_token(&p);
+    while (has_tokens(&c)) {
+        if (peek_token(&c)->kind == T_LABEL) {
+            advance_token(&c);
         }
 
-        struct token *opcode = consume_instruction(&p);
-        if (!opcode) continue;
+        struct token *opcode = advance_token(&c);
+        if (opcode->kind == T_NEWLINE) continue;
+        if (!is_instruction(opcode->kind)) {
+            report_compiler_error(opcode, "unknown instruction");
+            sync_compiler(&c);
+            continue;
+        }
 
         switch (opcode->kind) {
         case T_ORIG:;
-            struct token *addr = consume_num(&p);
+            struct token *addr = consume_num(&c);
             if (!addr) continue;
             fprintf(out, "0x%04x\n", addr->lit);
             break;
@@ -671,13 +665,13 @@ int main(void)
         case T_AND:;
             struct token *dst, *src1, *src2;
 
-            if (!(dst = consume_reg(&p))) continue;
-            if (!consume(&p, T_COMMA, "expected comma")) continue;
+            if (!(dst = consume_reg(&c))) continue;
+            if (!consume(&c, T_COMMA, "expected comma")) continue;
 
-            if (!(src1 = consume_reg(&p))) continue;
-            if (!consume(&p, T_COMMA, "expected comma")) continue;
+            if (!(src1 = consume_reg(&c))) continue;
+            if (!consume(&c, T_COMMA, "expected comma")) continue;
 
-            if (!(src2 = consume_reg_or_num(&p))) continue;
+            if (!(src2 = consume_reg_or_num(&c))) continue;
 
             unsigned op = OP_ADD;
             if (opcode->kind == T_AND) op = OP_AND;
@@ -696,14 +690,17 @@ int main(void)
 
             fprintf(out, "0x%04x\n", op);
             break;
+
+        case T_HALT:
+            // @TODO(art): hack for halting, remove later
+            fprintf(out, "0x45\n");
+            break;
         }
 
-        if (!consume(&p, T_NEWLINE, "expected new line after instruction"))
+        if (!consume(&c, T_NEWLINE, "expected new line after instruction"))
             continue;
     }
 
-    // @TODO(art): hack for halting, remove later
-    fprintf(out, "0x45\n");
     fflush(out);
 
     return 0;
