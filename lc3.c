@@ -65,7 +65,7 @@ int main(void)
     // @NOTE(art): we expect first instruction to be starting address
     fscanf(f, "%x", regs + R_PC);
     u16 op;
-    u16 offset = regs[R_PC];
+    size_t offset = regs[R_PC];
     // @TODO(art): better parsing?
     while (fscanf(f, "%x", &op) != EOF) {
         mem_writew(op, offset);
@@ -168,7 +168,10 @@ int main(void)
         case OP_BR: {
             u16 nzp = inst >> 9 & 0x7;
             u16 pcoffset9 = sext(inst & 0x1FF, 9) << 1;
-            if (nzp == (regs[R_PSR] & 0x7)) {
+
+            if ((nzp & CC_P) && (regs[R_PSR] & CC_P) ||
+                    (nzp & CC_Z) && (regs[R_PSR] & CC_Z) ||
+                    (nzp & CC_N) && (regs[R_PSR] & CC_N)) {
                 regs[R_PC] += pcoffset9;
             }
         } break;
