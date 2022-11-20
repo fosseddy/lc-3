@@ -120,7 +120,7 @@ struct tokens_array {
 struct label {
     char *name;
     size_t len;
-    size_t addr;
+    size_t offset;
 };
 
 struct labels_array {
@@ -131,6 +131,8 @@ struct labels_array {
 
 struct compiler {
     struct tokens_array *tokens;
+    size_t start_addr;
+    size_t addr_offset;
     size_t curr;
 };
 
@@ -321,6 +323,19 @@ enum lc3_reg get_reg(enum token_kind kind)
     }
 }
 
+struct label *get_label(struct labels_array *ls, struct token *t)
+{
+    struct label *found = NULL;
+    for (size_t i = 0; i < ls->size; ++i) {
+        struct label *l = ls->buf + i;
+        if (l->len == t->len && memcmp(l->name, t->lexem, t->len) == 0) {
+            found = l;
+            break;
+        }
+    }
+    return found;
+}
+
 struct token *consume(struct compiler *c, enum token_kind kind, char *msg)
 {
     struct token *t = advance_token(c);
@@ -363,6 +378,38 @@ struct token *consume_reg_or_num(struct compiler *c)
         return NULL;
     }
     return t;
+}
+
+struct token *consume_comma(struct compiler *c)
+{
+    struct token *t = advance_token(c);
+    if (t->kind != T_COMMA) {
+        report_compiler_error(t, "expected comma");
+        sync_compiler(c);
+        return NULL;
+    }
+    return t;
+}
+
+struct label *consume_label(struct compiler *c, struct labels_array *ls)
+{
+    struct token *ident = consume(c, T_IDENT, "expected label");
+    if (!ident) return NULL;
+
+    struct label *found = get_label(ls, ident);
+    if (!found) {
+        report_compiler_error(ident, "label does not exist");
+        sync_compiler(c);
+        return NULL;
+    }
+    return found;
+}
+
+size_t calc_offset(struct compiler *c, struct label *ident)
+{
+    size_t label_addr = c->start_addr + ident->offset;
+    size_t curr_addr = c->start_addr + c->addr_offset + 2;
+    return (label_addr - curr_addr) / 2;
 }
 
 int main(void)
@@ -626,7 +673,7 @@ int main(void)
             labels.buf[labels.size++] = (struct label) {
                 .name = t->lexem,
                 .len = t->len,
-                .addr = (size_t) addr_offset
+                .offset = (size_t) addr_offset
             };
             break;
         }
@@ -634,6 +681,8 @@ int main(void)
 
     struct compiler c = {
         .tokens = &tokens,
+        .start_addr = 0x3000,
+        .addr_offset = 0,
         .curr = 0
     };
 
@@ -655,21 +704,34 @@ int main(void)
         }
 
         switch (opcode->kind) {
-        case T_ORIG:;
+        case T_ORIG: {
+            if (c.curr > 1) {
+                report_compiler_error(opcode, "must be top level");
+                sync_compiler(&c);
+                continue;
+            }
             struct token *addr = consume_num(&c);
             if (!addr) continue;
+            c.start_addr = addr->lit;
+            c.addr_offset -= 2;
             fprintf(out, "0x%04x\n", addr->lit);
-            break;
+        } break;
+
+        case T_FILL: {
+            struct token *value = consume_num(&c);
+            if (!value) continue;
+            fprintf(out, "0x%04x\n", value->lit);
+        } break;
 
         case T_ADD:
-        case T_AND:;
+        case T_AND: {
             struct token *dst, *src1, *src2;
 
             if (!(dst = consume_reg(&c))) continue;
-            if (!consume(&c, T_COMMA, "expected comma")) continue;
+            if (!consume_comma(&c)) continue;
 
             if (!(src1 = consume_reg(&c))) continue;
-            if (!consume(&c, T_COMMA, "expected comma")) continue;
+            if (!consume_comma(&c)) continue;
 
             if (!(src2 = consume_reg_or_num(&c))) continue;
 
@@ -677,7 +739,6 @@ int main(void)
             if (opcode->kind == T_AND) op = OP_AND;
 
             op = op << 12;
-
             op |= get_reg(dst->kind) << 9;
             op |= get_reg(src1->kind) << 6;
 
@@ -685,20 +746,99 @@ int main(void)
                 op |= get_reg(src2->kind);
             } else {
                 op |= 0x1 << 5;
-                op |= src2->lit;
+                op |= src2->lit & 0x1F;
             }
 
             fprintf(out, "0x%04x\n", op);
-            break;
+        } break;
+
+        case T_LEA: {
+            struct token *dst;
+            struct label *ident;
+
+            if (!(dst = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(ident = consume_label(&c, &labels))) continue;
+
+            size_t offset = calc_offset(&c, ident);
+            unsigned op = OP_LEA << 12;
+            op |= get_reg(dst->kind) << 9;
+            op |= offset & 0x1FF;
+
+            fprintf(out, "0x%04x\n", op);
+        } break;
+
+        case T_LDW: {
+            struct token *dst, *base, *offset;
+
+            if (!(dst = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(base = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(offset = consume_num(&c))) continue;
+
+            unsigned op = OP_LDW << 12;
+            op |= get_reg(dst->kind) << 9;
+            op |= get_reg(base->kind) << 6;
+            op |= offset->lit & 0x3F;
+
+            fprintf(out, "0x%04x\n", op);
+        } break;
+
+        case T_BRNZP:
+        case T_BRNZ:
+        case T_BRNP:
+        case T_BRZP:
+        case T_BRN:
+        case T_BRZ:
+        case T_BRP:
+        case T_BR: {
+            struct label *ident = consume_label(&c, &labels);
+            if (!ident) continue;
+
+            size_t offset = calc_offset(&c, ident);
+            unsigned op = OP_BR << 12;
+
+            unsigned nzp;
+            switch (opcode->kind) {
+            case T_BRNZP: nzp = 0x7; break;
+            case T_BRNZ:  nzp = 0x6; break;
+            case T_BRNP:  nzp = 0x5; break;
+            case T_BRZP:  nzp = 0x3; break;
+            case T_BRN:   nzp = 0x4; break;
+            case T_BRZ:   nzp = 0x2; break;
+            case T_BRP:   nzp = 0x1; break;
+            case T_BR:    nzp = 0x7; break;
+            }
+
+            op |= nzp << 9;
+            op |= offset & 0x1FF;
+            fprintf(out, "0x%04x\n", op);
+        } break;
+
+        case T_TRAP: {
+            struct token *trapvec = consume_num(&c);
+            if (!trapvec) continue;
+
+            unsigned op = OP_TRAP << 12;
+            op |= trapvec->lit & 0xFF;
+            fprintf(out, "0x%04x\n", op);
+        } break;
 
         case T_HALT:
             // @TODO(art): hack for halting, remove later
             fprintf(out, "0x45\n");
             break;
+
         }
 
         if (!consume(&c, T_NEWLINE, "expected new line after instruction"))
             continue;
+
+        c.addr_offset += 2;
     }
 
     fflush(out);
