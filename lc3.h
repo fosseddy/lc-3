@@ -1,6 +1,8 @@
 #ifndef LC3_H
 #define LC3_H
 
+typedef unsigned short u16;
+
 enum lc3_reg {
     R_R0 = 0,
     R_R1,
@@ -20,18 +22,18 @@ enum lc3_reg {
 enum lc3_opcode {
     OP_BR = 0,
     OP_ADD,
-    OP_LDB,
-    OP_STB,
-    OP_JSR, // @TODO(art): not implemented
+    OP_LD,
+    OP_ST,
+    OP_JSR,
     OP_AND,
-    OP_LDW,
-    OP_STW,
-    OP_RTI, // @TODO(art): not implemented
-    OP_XOR,
-    OP_RESERVED3,
-    OP_RESERVED4,
+    OP_LDR,
+    OP_STR,
+    OP_RTI,
+    OP_NOT,
+    OP_LDI,
+    OP_STI,
     OP_JMP,
-    OP_SHF,
+    OP_RESERVED,
     OP_LEA,
     OP_TRAP // @TODO(art): not implemented
 };

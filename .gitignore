@@ -1,2 +1,4 @@
 lc3
 asm
+*.obj
+*.asm
