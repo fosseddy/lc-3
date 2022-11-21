@@ -50,9 +50,14 @@ enum token_kind {
     T_reg_end,
 
     T_instruction_begin,
-    T_BR,
-    T_IN,
+    T_ORIG,
+    T_FILL,
+    T_BLKW,
+    T_STRINGZ,
 
+    T_BR,
+    T_LD,
+    T_ST,
     T_ADD,
     T_AND,
     T_BRN,
@@ -60,40 +65,32 @@ enum token_kind {
     T_BRP,
     T_JMP,
     T_JSR,
-    T_LDB,
-    T_LDW,
+    T_LDI,
+    T_LDR,
     T_LEA,
-    T_NOP,
     T_NOT,
     T_RET,
     T_RTI,
-    T_STB,
-    T_STW,
-    T_XOR,
-    T_OUT,
-
+    T_STI,
+    T_STR,
     T_BRNZ,
     T_BRNP,
     T_BRZP,
     T_JSRR,
-    T_LSHF,
     T_TRAP,
-    T_HALT,
-    T_GETC,
-    T_PUTS,
-
-    T_RSHFL,
-    T_RSHFA,
     T_BRNZP,
 
-    T_ORIG,
-    T_FILL,
-    T_BLKW,
-    T_STRINGZ,
+    T_IN,
+    T_OUT,
+    T_GETC,
+    T_PUTS,
+    T_HALT,
+    T_PUTSP,
     T_instruction_end,
 
     T_DECIMAL,
-    T_HEX
+    T_HEX,
+    T_STRING
 };
 
 struct scanner {
@@ -323,6 +320,44 @@ enum lc3_reg get_reg(enum token_kind kind)
     }
 }
 
+enum lc3_opcode get_opcode(enum token_kind kind)
+{
+    switch (kind) {
+    case T_BR:
+    case T_BRN:
+    case T_BRZ:
+    case T_BRP:
+    case T_BRNZ:
+    case T_BRNP:
+    case T_BRZP:
+    case T_BRNZP: return OP_BR;
+
+    case T_IN:
+    case T_OUT:
+    case T_GETC:
+    case T_PUTS:
+    case T_HALT:
+    case T_PUTSP:
+    case T_TRAP: return OP_TRAP;
+
+    case T_LD: return OP_LD;
+    case T_ST: return OP_ST;
+    case T_ADD: return OP_ADD;
+    case T_AND: return OP_AND;
+    case T_JMP: return OP_JMP;
+    case T_JSR: return OP_JSR;
+    case T_LDI: return OP_LDI;
+    case T_LDR: return OP_LDR;
+    case T_LEA: return OP_LEA;
+    case T_NOT: return OP_NOT;
+    case T_RET: return OP_JMP;
+    case T_RTI: return OP_RTI;
+    case T_STI: return OP_STI;
+    case T_STR: return OP_STR;
+    case T_JSRR: return OP_JSR;
+    }
+}
+
 struct label *get_label(struct labels_array *ls, struct token *t)
 {
     struct label *found = NULL;
@@ -408,8 +443,8 @@ struct label *consume_label(struct compiler *c, struct labels_array *ls)
 size_t calc_offset(struct compiler *c, struct label *ident)
 {
     size_t label_addr = c->start_addr + ident->offset;
-    size_t curr_addr = c->start_addr + c->addr_offset + 2;
-    return (label_addr - curr_addr) / 2;
+    size_t curr_addr = c->start_addr + c->addr_offset + 1;
+    return label_addr - curr_addr;
 }
 
 int main(void)
@@ -467,6 +502,12 @@ int main(void)
                 case 'i':
                     if (*(s.start + 1) == 'n') kind = T_IN;
                     break;
+                case 'l':
+                    if (*(s.start + 1) == 'd') kind = T_LD;
+                    break;
+                case 's':
+                    if (*(s.start + 1) == 't') kind = T_ST;
+                    break;
                 }
                 break;
 
@@ -496,20 +537,16 @@ int main(void)
                     }
                     break;
                 case 'l':
-                    if (memcmp(s.start + 1, "db", 2) == 0) {
-                        kind = T_LDB;
-                    } else if (memcmp(s.start + 1, "dw", 2) == 0) {
-                        kind = T_LDW;
+                    if (memcmp(s.start + 1, "di", 2) == 0) {
+                        kind = T_LDI;
+                    } else if (memcmp(s.start + 1, "dr", 2) == 0) {
+                        kind = T_LDR;
                     } else if (memcmp(s.start + 1, "ea", 2) == 0) {
                         kind = T_LEA;
                     }
                     break;
                 case 'n':
-                    if (memcmp(s.start + 1, "op", 2) == 0) {
-                        kind = T_NOP;
-                    } else if (memcmp(s.start + 1, "ot", 2) == 0) {
-                        kind = T_NOT;
-                    }
+                    if (memcmp(s.start + 1, "ot", 2) == 0) kind = T_NOT;
                     break;
                 case 'r':
                     if (memcmp(s.start + 1, "et", 2) == 0) {
@@ -519,14 +556,11 @@ int main(void)
                     }
                     break;
                 case 's':
-                    if (memcmp(s.start + 1, "tb", 2) == 0) {
-                        kind = T_STB;
-                    } else if (memcmp(s.start + 1, "tw", 2) == 0) {
-                        kind = T_STW;
+                    if (memcmp(s.start + 1, "ti", 2) == 0) {
+                        kind = T_STI;
+                    } else if (memcmp(s.start + 1, "tr", 2) == 0) {
+                        kind = T_STR;
                     }
-                    break;
-                case 'x':
-                    if (memcmp(s.start + 1, "or", 2) == 0) kind = T_XOR;
                     break;
                 case 'o':
                     if (memcmp(s.start + 1, "ut", 2) == 0) kind = T_OUT;
@@ -548,9 +582,6 @@ int main(void)
                 case 'j':
                     if (memcmp(s.start + 1, "srr", 3) == 0) kind = T_JSRR;
                     break;
-                case 'l':
-                    if (memcmp(s.start + 1, "shf", 3) == 0) kind = T_LSHF;
-                    break;
                 case 't':
                     if (memcmp(s.start + 1, "rap", 3) == 0) kind = T_TRAP;
                     break;
@@ -568,13 +599,6 @@ int main(void)
 
             case 5:
                 switch (*s.start) {
-                case 'r':
-                    if (memcmp(s.start + 1, "shfl", 4) == 0) {
-                        kind = T_RSHFL;
-                    } else if (memcmp(s.start + 1, "shfa", 4) == 0) {
-                        kind = T_RSHFA;
-                    }
-                    break;
                 case 'b':
                     if (memcmp(s.start + 1, "rnzp", 4) == 0) kind = T_BRNZP;
                     break;
@@ -600,6 +624,13 @@ int main(void)
 
         case ',':
             tokens_put(&tokens, T_COMMA, &s);
+            break;
+
+        case '"':
+            advance(&s);
+            while (!next(&s, '"')) advance(&s);
+            advance(&s);
+            tokens_put(&tokens, T_STRING, &s);
             break;
 
         case '#':
@@ -651,10 +682,10 @@ int main(void)
         }
     }
 
-    // @TODO(art): -2 to ignore .orig directive, we assume it always present.
+    // @TODO(art): -1 to ignore .orig directive, we assume it always present.
     // Make it so it does not matter if directive was used, as default address
     // for user programs is 0x3000.
-    int addr_offset = -2;
+    int addr_offset = -1;
 
     // @LEAK(art): let OS free it for now
     struct labels_array labels;
@@ -665,7 +696,7 @@ int main(void)
 
         switch (t->kind) {
         case T_NEWLINE:
-            addr_offset += 2;
+            addr_offset += 1;
             break;
 
         case T_LABEL:;
@@ -686,7 +717,7 @@ int main(void)
         .curr = 0
     };
 
-    FILE *out = fopen("out.obj", "w");
+    FILE *out = fopen("out.obj", "wb");
     // @TODO(art): handle error
     assert(out != NULL);
 
@@ -713,14 +744,31 @@ int main(void)
             struct token *addr = consume_num(&c);
             if (!addr) continue;
             c.start_addr = addr->lit;
-            c.addr_offset -= 2;
-            fprintf(out, "0x%04x\n", addr->lit);
+            c.addr_offset -= 1;
+            fwrite(&addr->lit, sizeof(addr->lit), 1, out);
         } break;
 
         case T_FILL: {
             struct token *value = consume_num(&c);
             if (!value) continue;
-            fprintf(out, "0x%04x\n", value->lit);
+            fwrite(&value->lit, sizeof(value->lit), 1, out);
+        } break;
+
+        case T_BLKW: {
+            struct token *value = consume_num(&c);
+            if (!value) continue;
+            c.addr_offset += value->lit;
+        } break;
+
+        case T_STRINGZ: {
+            struct token *str = consume(&c, T_STRING, "expected string");
+            if (!str) continue;
+
+            for (size_t i = 1; i < str->len - 1; ++i) {
+                fwrite(str->lexem + i, sizeof(char), 1, out);
+            }
+            char null = '\0';
+            fwrite(&null, sizeof(char), 1, out);
         } break;
 
         case T_ADD:
@@ -735,10 +783,7 @@ int main(void)
 
             if (!(src2 = consume_reg_or_num(&c))) continue;
 
-            unsigned op = OP_ADD;
-            if (opcode->kind == T_AND) op = OP_AND;
-
-            op = op << 12;
+            unsigned op = get_opcode(opcode->kind) << 12;
             op |= get_reg(dst->kind) << 9;
             op |= get_reg(src1->kind) << 6;
 
@@ -749,43 +794,7 @@ int main(void)
                 op |= src2->lit & 0x1F;
             }
 
-            fprintf(out, "0x%04x\n", op);
-        } break;
-
-        case T_LEA: {
-            struct token *dst;
-            struct label *ident;
-
-            if (!(dst = consume_reg(&c))) continue;
-            if (!consume_comma(&c)) continue;
-
-            if (!(ident = consume_label(&c, &labels))) continue;
-
-            size_t offset = calc_offset(&c, ident);
-            unsigned op = OP_LEA << 12;
-            op |= get_reg(dst->kind) << 9;
-            op |= offset & 0x1FF;
-
-            fprintf(out, "0x%04x\n", op);
-        } break;
-
-        case T_LDW: {
-            struct token *dst, *base, *offset;
-
-            if (!(dst = consume_reg(&c))) continue;
-            if (!consume_comma(&c)) continue;
-
-            if (!(base = consume_reg(&c))) continue;
-            if (!consume_comma(&c)) continue;
-
-            if (!(offset = consume_num(&c))) continue;
-
-            unsigned op = OP_LDW << 12;
-            op |= get_reg(dst->kind) << 9;
-            op |= get_reg(base->kind) << 6;
-            op |= offset->lit & 0x3F;
-
-            fprintf(out, "0x%04x\n", op);
+            fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_BRNZP:
@@ -799,46 +808,181 @@ int main(void)
             struct label *ident = consume_label(&c, &labels);
             if (!ident) continue;
 
-            size_t offset = calc_offset(&c, ident);
-            unsigned op = OP_BR << 12;
-
             unsigned nzp;
             switch (opcode->kind) {
             case T_BRNZP: nzp = 0x7; break;
-            case T_BRNZ:  nzp = 0x6; break;
-            case T_BRNP:  nzp = 0x5; break;
-            case T_BRZP:  nzp = 0x3; break;
-            case T_BRN:   nzp = 0x4; break;
-            case T_BRZ:   nzp = 0x2; break;
-            case T_BRP:   nzp = 0x1; break;
-            case T_BR:    nzp = 0x7; break;
+            case T_BRNZ: nzp = 0x6; break;
+            case T_BRNP: nzp = 0x5; break;
+            case T_BRZP: nzp = 0x3; break;
+            case T_BRN: nzp = 0x4; break;
+            case T_BRZ: nzp = 0x2; break;
+            case T_BRP: nzp = 0x1; break;
+            case T_BR: nzp = 0x7; break;
             }
 
+            unsigned op = get_opcode(opcode->kind) << 12;
             op |= nzp << 9;
-            op |= offset & 0x1FF;
-            fprintf(out, "0x%04x\n", op);
+            op |= calc_offset(&c, ident) & 0x1FF;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_JMP: {
+            struct token *base = consume_reg(&c);
+            if (!base) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= get_reg(base->kind) << 6;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_RET: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x7 << 6;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_JSR: {
+            struct label *ident = consume_label(&c, &labels);
+            if (!ident) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 1 << 11;
+            op |= calc_offset(&c, ident) & 0x7FF;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_JSRR: {
+            struct token *base = consume_reg(&c);
+            if (!base) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= get_reg(base->kind) << 6;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_LD:
+        case T_ST:
+        case T_LDI:
+        case T_STI: {
+            struct token *reg;
+            struct label *ident;
+
+            if (!(reg = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(ident = consume_label(&c, &labels))) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= get_reg(reg->kind) << 9;
+            op |= calc_offset(&c, ident) & 0x1FF;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_LDR:
+        case T_STR: {
+            struct token *reg, *base, *offset;
+
+            if (!(reg = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(base = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(offset = consume_num(&c))) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= get_reg(reg->kind) << 9;
+            op |= get_reg(base->kind) << 6;
+            op |= offset->lit & 0x3F;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_LEA: {
+            struct token *dst;
+            struct label *ident;
+
+            if (!(dst = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(ident = consume_label(&c, &labels))) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= get_reg(dst->kind) << 9;
+            op |= calc_offset(&c, ident) & 0x1FF;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_NOT: {
+            struct token *dst, *src;
+
+            if (!(dst = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            if (!(src = consume_reg(&c))) continue;
+            if (!consume_comma(&c)) continue;
+
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= get_reg(dst->kind) << 9;
+            op |= get_reg(src->kind) << 6;
+            op |= 0x3F;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_RTI: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_TRAP: {
             struct token *trapvec = consume_num(&c);
             if (!trapvec) continue;
 
-            unsigned op = OP_TRAP << 12;
+            unsigned op = get_opcode(opcode->kind) << 12;
             op |= trapvec->lit & 0xFF;
-            fprintf(out, "0x%04x\n", op);
+            fwrite(&op, sizeof(op), 1, out);
         } break;
 
-        case T_HALT:
-            // @TODO(art): hack for halting, remove later
-            fprintf(out, "0x45\n");
-            break;
+        case T_IN: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x23;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
 
+        case T_OUT: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x21;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_GETC: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x20;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_PUTS: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x22;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_HALT: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x25;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
+
+        case T_PUTSP: {
+            unsigned op = get_opcode(opcode->kind) << 12;
+            op |= 0x24;
+            fwrite(&op, sizeof(op), 1, out);
+        } break;
         }
 
         if (!consume(&c, T_NEWLINE, "expected new line after instruction"))
             continue;
 
-        c.addr_offset += 2;
+        c.addr_offset += 1;
     }
 
     fflush(out);
