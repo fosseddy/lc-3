@@ -745,19 +745,23 @@ int main(void)
             if (!addr) continue;
             c.start_addr = addr->lit;
             c.addr_offset -= 1;
-            fwrite(&addr->lit, sizeof(addr->lit), 1, out);
+            fwrite(&addr->lit, sizeof(u16), 1, out);
         } break;
 
         case T_FILL: {
             struct token *value = consume_num(&c);
             if (!value) continue;
-            fwrite(&value->lit, sizeof(value->lit), 1, out);
+            fwrite(&value->lit, sizeof(u16), 1, out);
         } break;
 
         case T_BLKW: {
             struct token *value = consume_num(&c);
             if (!value) continue;
-            c.addr_offset += value->lit;
+
+            u16 zero = 0;
+            for (size_t i = 0; i < value->lit; ++i) {
+                fwrite(&zero, sizeof(zero), 1, out);
+            }
         } break;
 
         case T_STRINGZ: {
@@ -765,10 +769,11 @@ int main(void)
             if (!str) continue;
 
             for (size_t i = 1; i < str->len - 1; ++i) {
-                fwrite(str->lexem + i, sizeof(char), 1, out);
+                u16 c = str->lexem[i];
+                fwrite(&c, sizeof(c), 1, out);
             }
-            char null = '\0';
-            fwrite(&null, sizeof(char), 1, out);
+            u16 null = '\0';
+            fwrite(&null, sizeof(null), 1, out);
         } break;
 
         case T_ADD:
@@ -783,7 +788,7 @@ int main(void)
 
             if (!(src2 = consume_reg_or_num(&c))) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(dst->kind) << 9;
             op |= get_reg(src1->kind) << 6;
 
@@ -820,7 +825,7 @@ int main(void)
             case T_BR: nzp = 0x7; break;
             }
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= nzp << 9;
             op |= calc_offset(&c, ident) & 0x1FF;
             fwrite(&op, sizeof(op), 1, out);
@@ -830,13 +835,13 @@ int main(void)
             struct token *base = consume_reg(&c);
             if (!base) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(base->kind) << 6;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_RET: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x7 << 6;
             fwrite(&op, sizeof(op), 1, out);
         } break;
@@ -845,7 +850,7 @@ int main(void)
             struct label *ident = consume_label(&c, &labels);
             if (!ident) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 1 << 11;
             op |= calc_offset(&c, ident) & 0x7FF;
             fwrite(&op, sizeof(op), 1, out);
@@ -855,7 +860,7 @@ int main(void)
             struct token *base = consume_reg(&c);
             if (!base) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(base->kind) << 6;
             fwrite(&op, sizeof(op), 1, out);
         } break;
@@ -872,7 +877,7 @@ int main(void)
 
             if (!(ident = consume_label(&c, &labels))) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(reg->kind) << 9;
             op |= calc_offset(&c, ident) & 0x1FF;
             fwrite(&op, sizeof(op), 1, out);
@@ -890,7 +895,7 @@ int main(void)
 
             if (!(offset = consume_num(&c))) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(reg->kind) << 9;
             op |= get_reg(base->kind) << 6;
             op |= offset->lit & 0x3F;
@@ -906,7 +911,7 @@ int main(void)
 
             if (!(ident = consume_label(&c, &labels))) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(dst->kind) << 9;
             op |= calc_offset(&c, ident) & 0x1FF;
             fwrite(&op, sizeof(op), 1, out);
@@ -921,7 +926,7 @@ int main(void)
             if (!(src = consume_reg(&c))) continue;
             if (!consume_comma(&c)) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= get_reg(dst->kind) << 9;
             op |= get_reg(src->kind) << 6;
             op |= 0x3F;
@@ -929,7 +934,7 @@ int main(void)
         } break;
 
         case T_RTI: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
@@ -937,43 +942,43 @@ int main(void)
             struct token *trapvec = consume_num(&c);
             if (!trapvec) continue;
 
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= trapvec->lit & 0xFF;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_IN: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x23;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_OUT: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x21;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_GETC: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x20;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_PUTS: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x22;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_HALT: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x25;
             fwrite(&op, sizeof(op), 1, out);
         } break;
 
         case T_PUTSP: {
-            unsigned op = get_opcode(opcode->kind) << 12;
+            u16 op = get_opcode(opcode->kind) << 12;
             op |= 0x24;
             fwrite(&op, sizeof(op), 1, out);
         } break;
