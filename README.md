@@ -1,5 +1,3 @@
 # Little Computer 3
 
-[ISA](https://users.ece.utexas.edu/~patt/22f.460n/handouts/appA.pdf)
-
-[Assembler](https://users.ece.utexas.edu/~patt/22f.460n/handouts/ch07.pdf)
+[ISA, Assembler](https://icourse.club/uploads/files/96a2b94d4be48285f2605d843a1e6db37da9a944.pdf)
