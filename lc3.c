@@ -39,7 +39,6 @@ void setcc(u16 value)
 
 // @TODO(art): proper object file loading
 // @TODO(art): init memory, PC, etc
-// @TODO(art): proper halting
 int main(void)
 {
     FILE *f = fopen("out.obj", "rb");
@@ -74,9 +73,10 @@ int main(void)
                 src2 = regs[src2];
             }
 
-            switch (opcode) {
-            case OP_ADD: regs[dst] = regs[src1] + src2; break;
-            case OP_AND: regs[dst] = regs[src1] & src2; break;
+            if (opcode == OP_ADD) {
+                regs[dst] = regs[src1] + src2;
+            } else {
+                regs[dst] = regs[src1] & src2;
             }
 
             setcc(regs[dst]);
@@ -176,6 +176,16 @@ int main(void)
         case OP_TRAP: {
             u16 trapvec8 = inst & 0xFF;
             switch (trapvec8) {
+            case 0x21: {
+                char c = regs[R_R0] & 0xFF;
+                putchar(c);
+            } break;
+            case 0x22: {
+                u16 addr = regs[R_R0];
+                while (memory[addr] != '\0') {
+                    putchar(memory[addr++]);
+                }
+            } break;
             case 0x25:
                 is_halted = 1;
                 puts("lc3 is halted");

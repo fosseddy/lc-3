@@ -105,7 +105,7 @@ struct token {
     char *lexem;
     size_t len;
     size_t line;
-    short unsigned lit;
+    u16 lit;
 };
 
 struct tokens_array {
@@ -770,6 +770,17 @@ int main(void)
 
             for (size_t i = 1; i < str->len - 1; ++i) {
                 u16 c = str->lexem[i];
+                if (c == '\\' && i + 1 < str->len) {
+                    switch (str->lexem[i + 1]) {
+                    case 'a': c = 0x7; i++; break;
+                    case 'b': c = 0x8; i++; break;
+                    case 't': c = 0x9; i++; break;
+                    case 'n': c = 0xA; i++; break;
+                    case 'v': c = 0xB; i++; break;
+                    case 'f': c = 0xC; i++; break;
+                    case 'r': c = 0xD; i++; break;
+                    }
+                }
                 fwrite(&c, sizeof(c), 1, out);
             }
             u16 null = '\0';
