@@ -450,7 +450,7 @@ size_t calc_offset(struct compiler *c, struct label *ident)
 int main(void)
 {
     // @TODO(art): get filepath from args
-    // @LEAK(art): let OS free it for now
+    // @LEAK(art): let OS free it
     char *src = read_file("./ex.asm");
 
     for (char *p = src; *p; p++) *p = tolower(*p);
@@ -462,7 +462,7 @@ int main(void)
         .add_newline = 0
     };
 
-    // @LEAK(art): let OS free it for now
+    // @LEAK(art): let OS free it
     struct tokens_array tokens;
     MEM_MAKE(&tokens, struct token);
 
@@ -687,7 +687,7 @@ int main(void)
     // for user programs is 0x3000.
     int addr_offset = -1;
 
-    // @LEAK(art): let OS free it for now
+    // @LEAK(art): let OS free it
     struct labels_array labels;
     MEM_MAKE(&labels, struct label);
 
